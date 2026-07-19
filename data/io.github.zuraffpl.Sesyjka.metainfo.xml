@@ -38,47 +38,53 @@
   <url type="vcs-browser">https://github.com/Lioheart/Sesyjka</url>
   <screenshots>
     <screenshot type="default" xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.5/screenshots/image.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.6/screenshots/image.png</image>
       <caption>Przeglądaj systemy RPG i hierarchiczną kolekcję podręczników</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.5/screenshots/image2.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.6/screenshots/image2.png</image>
       <caption>Edytuj lub usuwaj rekordy z menu kontekstowego</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.5/screenshots/image4.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.6/screenshots/image4.png</image>
       <caption>Dodawaj systemy gry i przypisuj wydawców</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.5/screenshots/image5.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.6/screenshots/image5.png</image>
       <caption>Twórz wydawcę bez zamykania aktualnego formularza</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.5/screenshots/image6.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.6/screenshots/image6.png</image>
       <caption>Zapisuj sesje z systemami, graczami, kampaniami i notatkami</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.5/screenshots/image7.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.6/screenshots/image7.png</image>
       <caption>Zarządzaj katalogiem graczy i tagami grup</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.5/screenshots/image8.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.6/screenshots/image8.png</image>
       <caption>Zarządzaj danymi wydawców i ich stronami internetowymi</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.5/screenshots/image9.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.6/screenshots/image9.png</image>
       <caption>Analizuj statystyki kolekcji i sesji w jasnym motywie</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.5/screenshots/image10.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.6/screenshots/image10.png</image>
       <caption>Korzystaj z pełnego interfejsu w ciemnym motywie Adwaita</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.5/screenshots/image11.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.6/screenshots/image11.png</image>
       <caption>Eksportuj i importuj bazy oraz przeglądaj je w trybie gościa</caption>
     </screenshot>
   </screenshots>
   <releases>
+    <release version="0.8.6" date="2026-07-19">
+      <description>
+        <p>Added explicit organizational group records for RPG items. Only records of type Grupa can be selected as a group, while the original SQLite column names and schema remain unchanged. Status-based row coloring remains disabled, and header action icons use stable theme names.</p>
+        <p xml:lang="pl">Dodano jawne grupy organizacyjne dla pozycji RPG. W polu Grupa można wybierać wyłącznie rekordy typu Grupa, bez zmiany nazw kolumn ani schematu SQLite. Kolorowanie wierszy według statusu pozostaje wyłączone, a ikony akcji używają stabilnych nazw motywu.</p>
+      </description>
+    </release>
     <release version="0.8.5" date="2026-07-19">
       <description>
         <p>Removed unsupported access to private GtkColumnView row widgets that could cause GTK accessibility assertions and segmentation faults. Table selection now uses supported CSS only.</p>

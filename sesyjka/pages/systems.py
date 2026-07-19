@@ -17,6 +17,14 @@ from ..widgets import Choice, ChoiceDropDown, FormGrid, TextDropDown
 from .base import CrudPage
 
 
+ITEM_TYPES = (
+    "Podręcznik Główny",
+    "Suplement",
+    "Inne",
+    "Grupa",
+)
+
+
 SUPPLEMENT_TYPES = (
     "Scenariusz/kampania",
     "Rozwinięcie zasad",
@@ -37,7 +45,7 @@ class SystemsPage(CrudPage):
                 ("Nazwa", "nazwa"),
                 ("Typ", "typ"),
                 ("Podgrupa", "typ_suplementu"),
-                ("Nadrzędny", "system_glowny_nazwa"),
+                ("Grupa", "system_glowny_nazwa"),
                 ("Wydawca", "wydawca_nazwa"),
                 ("Język", "jezyk"),
                 ("Fiz.", "fizyczny_tekst"),
@@ -327,32 +335,33 @@ class SystemsPage(CrudPage):
         )
         form = FormGrid()
         name = make_entry(record.get("nazwa") if record else "", "Nazwa pozycji")
-        selected_type = str(record.get("typ") or "Podręcznik Główny") if record else "Podręcznik Główny"
-        item_type = TextDropDown(
-            ["Podręcznik Główny", "Suplement", "Przygoda", "Dodatek", "Inne"],
-            selected_type,
-        )
+        raw_type = str(record.get("typ") or "Podręcznik Główny") if record else "Podręcznik Główny"
+        item_types_by_key = {value.casefold(): value for value in ITEM_TYPES}
+        selected_type = item_types_by_key.get(raw_type.casefold(), "Inne")
+        item_type = TextDropDown(ITEM_TYPES, selected_type)
         game_choices = [
             Choice(None, "Brak"),
             *[Choice(int(row["id"]), str(row["nazwa"])) for row in self.repository.game_systems()],
         ]
         game_system = ChoiceDropDown(game_choices, record.get("system_gry_id") if record else None)
 
-        main_books = [
+        group_records = [
             row
             for row in self.repository.systems()
-            if str(row.get("typ") or "").casefold() == "podręcznik główny".casefold()
+            if str(row.get("typ") or "").casefold() == "grupa"
             and (record is None or int(row["id"]) != int(record["id"]))
         ]
-        parent_choices = [
-            Choice(None, "Brak"),
-            *[
-                Choice(int(row["id"]), f"{row.get('system_gry_nazwa') or 'Bez systemu'} - {row['nazwa']}")
-                for row in main_books
-            ],
-        ]
-        parent_book = ChoiceDropDown(parent_choices, record.get("system_glowny_id") if record else None)
-        main_book_map = {int(row["id"]): row for row in main_books}
+        groups_by_system: dict[int, list[dict[str, Any]]] = defaultdict(list)
+        for group_record in group_records:
+            group_system_id = group_record.get("system_gry_id")
+            if group_system_id is not None:
+                groups_by_system[int(group_system_id)].append(group_record)
+
+        initial_group_id = record.get("system_glowny_id") if record else None
+        valid_group_ids = {int(row["id"]) for row in group_records}
+        if initial_group_id is not None and int(initial_group_id) not in valid_group_ids:
+            initial_group_id = None
+        group_selector = ChoiceDropDown([Choice(None, "Brak")], initial_group_id)
 
         publisher_row, publisher = self._publisher_selector(
             dialog,
@@ -443,7 +452,7 @@ class SystemsPage(CrudPage):
         form.add_row("Nazwa *", name)
         form.add_row("Typ *", item_type)
         form.add_row("System RPG *", game_system)
-        form.add_row("Podręcznik nadrzędny", parent_book)
+        form.add_row("Grupa", group_selector)
         form.add_row("Wydawca", publisher_row)
         form.add_row("Formaty", formats)
         form.add_row("Język", language)
@@ -481,7 +490,35 @@ class SystemsPage(CrudPage):
                 total += parse_price(price_vtt)
             purchase_price.set_text(f"{total:.2f}")
 
+        def refresh_group_choices(*_args: object) -> None:
+            current_group_id = group_selector.identifier()
+            selected_system_id = game_system.identifier()
+            available_groups = (
+                groups_by_system.get(int(selected_system_id), [])
+                if selected_system_id is not None
+                else []
+            )
+            choices = [
+                Choice(None, "Brak"),
+                *[
+                    Choice(int(group["id"]), str(group["nazwa"]))
+                    for group in sorted(
+                        available_groups,
+                        key=lambda item: str(item.get("nazwa") or "").casefold(),
+                    )
+                ],
+            ]
+            selected_id = current_group_id
+            if (
+                selected_id is None
+                and len(group_selector.choices) == 1
+                and initial_group_id is not None
+            ):
+                selected_id = int(initial_group_id)
+            group_selector.set_choices(choices, selected_id)
+
         def update_visibility(*_args: object) -> None:
+            form.set_row_visible(group_selector, item_type.text() != "Grupa")
             form.set_row_visible(supplement_box, item_type.text() == "Suplement")
             form.set_row_visible(vtt_platform, vtt_enabled.get_active())
             form.set_row_visible(price_physical, physical.get_active())
@@ -496,17 +533,19 @@ class SystemsPage(CrudPage):
             toggle.connect("toggled", update_visibility)
         collection_status.connect("notify::selected", update_visibility)
         item_type.connect("notify::selected", update_visibility)
+        game_system.connect("notify::selected", refresh_group_choices)
         for entry in (price_physical, price_pdf, price_vtt):
             entry.connect("changed", update_total)
+        refresh_group_choices()
         update_visibility()
 
         def build_payload() -> dict[str, Any]:
-            parent_id = parent_book.identifier()
+            parent_id = (
+                group_selector.identifier()
+                if item_type.text() != "Grupa"
+                else None
+            )
             selected_game_system_id = game_system.identifier()
-            if parent_id is not None:
-                parent = main_book_map.get(parent_id)
-                if parent and parent.get("system_gry_id") is not None:
-                    selected_game_system_id = int(parent["system_gry_id"])
             if selected_game_system_id is None:
                 raise ValueError("Przypisz pozycję do systemu RPG.")
 

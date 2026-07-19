@@ -333,6 +333,17 @@ class Repository:
             "vtt", "system_glowny_nazwa_custom", "system_gry_id", "cena_fiz",
             "cena_pdf", "cena_vtt", "rok_wydania", "isbn",
         )
+        allowed_types = {
+            value.casefold(): value
+            for value in ("Podręcznik Główny", "Suplement", "Inne", "Grupa")
+        }
+        canonical_type = allowed_types.get(item_type.casefold())
+        if canonical_type is None:
+            raise ValueError(
+                "Typ pozycji musi być jednym z: Podręcznik Główny, Suplement, Inne, Grupa."
+            )
+        item_type = canonical_type
+
         normalized = dict(values)
         normalized["nazwa"] = name
         normalized["typ"] = item_type
@@ -363,38 +374,68 @@ class Repository:
                 raise ValueError("Wybrany wydawca nie istnieje w bazie wydawców.")
             normalized["wydawca_id"] = int(publisher_id)
 
+        existing_record: dict[str, Any] | None = None
+        if record_id is not None:
+            existing_rows = self.db.table_rows(
+                "systemy_rpg.db",
+                "SELECT id, typ, system_gry_id FROM systemy_rpg WHERE id=?",
+                (int(record_id),),
+            )
+            if existing_rows:
+                existing_record = dict(existing_rows[0])
+
+        child_count = 0
+        if record_id is not None:
+            child_count = int(
+                self.db.table_rows(
+                    "systemy_rpg.db",
+                    "SELECT COUNT(*) AS count FROM systemy_rpg WHERE system_glowny_id=?",
+                    (int(record_id),),
+                )[0]["count"]
+            )
+
+        if (
+            existing_record
+            and str(existing_record.get("typ") or "").casefold() == "grupa"
+            and item_type != "Grupa"
+            and child_count
+        ):
+            raise ValueError(
+                "Nie można zmienić typu grupy, dopóki są do niej przypisane pozycje."
+            )
+        if (
+            existing_record
+            and item_type == "Grupa"
+            and child_count
+            and existing_record.get("system_gry_id") is not None
+            and int(existing_record["system_gry_id"]) != int(game_system_id)
+        ):
+            raise ValueError(
+                "Nie można przenieść grupy do innego systemu RPG, dopóki zawiera pozycje."
+            )
+
         parent_id = normalized.get("system_glowny_id")
-        if parent_id is not None:
+        if item_type == "Grupa":
+            normalized["system_glowny_id"] = None
+        elif parent_id is not None:
             parent_id = int(parent_id)
             if record_id is not None and parent_id == int(record_id):
-                raise ValueError("Pozycja nie może być własnym podręcznikiem nadrzędnym.")
+                raise ValueError("Pozycja nie może być własną grupą.")
             parent_rows = self.db.table_rows(
                 "systemy_rpg.db",
-                "SELECT id, system_glowny_id, system_gry_id FROM systemy_rpg WHERE id=?",
+                "SELECT id, typ, system_glowny_id, system_gry_id FROM systemy_rpg WHERE id=?",
                 (parent_id,),
             )
             if not parent_rows:
-                raise ValueError("Wybrany podręcznik nadrzędny nie istnieje.")
+                raise ValueError("Wybrana grupa nie istnieje.")
             parent = parent_rows[0]
+            if str(parent["typ"] or "").casefold() != "grupa":
+                raise ValueError("Jako grupę można wybrać wyłącznie pozycję typu Grupa.")
             if parent["system_gry_id"] is None or int(parent["system_gry_id"]) != int(game_system_id):
-                raise ValueError("Podręcznik nadrzędny musi należeć do tego samego systemu RPG.")
-            if record_id is not None:
-                seen = {parent_id}
-                ancestor_id = parent["system_glowny_id"]
-                while ancestor_id is not None:
-                    ancestor_id = int(ancestor_id)
-                    if ancestor_id == int(record_id):
-                        raise ValueError("Relacja nadrzędna utworzyłaby cykl w hierarchii.")
-                    if ancestor_id in seen:
-                        break
-                    seen.add(ancestor_id)
-                    rows = self.db.table_rows(
-                        "systemy_rpg.db",
-                        "SELECT system_glowny_id FROM systemy_rpg WHERE id=?",
-                        (ancestor_id,),
-                    )
-                    ancestor_id = rows[0]["system_glowny_id"] if rows else None
+                raise ValueError("Grupa musi należeć do tego samego systemu RPG.")
             normalized["system_glowny_id"] = parent_id
+        else:
+            normalized["system_glowny_id"] = None
         for key in ("fizyczny", "pdf"):
             normalized[key] = int(bool(normalized.get(key)))
         normalized["vtt"] = _clean(normalized.get("vtt"))
@@ -457,7 +498,7 @@ class Repository:
         )
         if child_count:
             raise ValueError(
-                "Nie można usunąć podręcznika, do którego przypisano pozycje podrzędne."
+                "Nie można usunąć grupy, do której przypisano pozycje."
             )
         with self.db.connect("systemy_rpg.db", write=True) as connection:
             connection.execute("DELETE FROM systemy_rpg WHERE id=?", (record_id,))

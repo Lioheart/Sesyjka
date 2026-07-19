@@ -335,13 +335,13 @@ class RepositoryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "używanego przez systemy"):
             self.repository.delete_publisher(publisher_id)
 
-    def test_parent_book_must_belong_to_same_game_system(self) -> None:
+    def test_group_must_belong_to_same_game_system(self) -> None:
         first_system = self.repository.save_game_system({"nazwa": "Pierwszy"})
         second_system = self.repository.save_game_system({"nazwa": "Drugi"})
-        parent_id = self.repository.save_system(
+        group_id = self.repository.save_system(
             {
-                "nazwa": "Podręcznik",
-                "typ": "Podręcznik Główny",
+                "nazwa": "Grupa pierwszego systemu",
+                "typ": "Grupa",
                 "system_gry_id": first_system,
             }
         )
@@ -351,8 +351,75 @@ class RepositoryTests(unittest.TestCase):
                     "nazwa": "Suplement",
                     "typ": "Suplement",
                     "system_gry_id": second_system,
-                    "system_glowny_id": parent_id,
+                    "system_glowny_id": group_id,
                 }
+            )
+
+    def test_only_group_records_can_be_selected_as_parent(self) -> None:
+        game_system_id = self.repository.save_game_system({"nazwa": "System"})
+        main_book_id = self.repository.save_system(
+            {
+                "nazwa": "Podręcznik główny",
+                "typ": "Podręcznik Główny",
+                "system_gry_id": game_system_id,
+            }
+        )
+        with self.assertRaisesRegex(ValueError, "wyłącznie pozycję typu Grupa"):
+            self.repository.save_system(
+                {
+                    "nazwa": "Pozycja podrzędna",
+                    "typ": "Inne",
+                    "system_gry_id": game_system_id,
+                    "system_glowny_id": main_book_id,
+                }
+            )
+
+    def test_group_can_contain_rpg_positions(self) -> None:
+        game_system_id = self.repository.save_game_system({"nazwa": "System"})
+        group_id = self.repository.save_system(
+            {
+                "nazwa": "Karty i pomoce",
+                "typ": "Grupa",
+                "system_gry_id": game_system_id,
+            }
+        )
+        child_id = self.repository.save_system(
+            {
+                "nazwa": "Karty czarów",
+                "typ": "Inne",
+                "system_gry_id": game_system_id,
+                "system_glowny_id": group_id,
+            }
+        )
+        child = next(item for item in self.repository.systems() if item["id"] == child_id)
+        self.assertEqual(child["system_glowny_id"], group_id)
+        self.assertEqual(child["system_glowny_nazwa"], "Karty i pomoce")
+
+    def test_group_cannot_be_converted_while_it_contains_positions(self) -> None:
+        game_system_id = self.repository.save_game_system({"nazwa": "System"})
+        group_id = self.repository.save_system(
+            {
+                "nazwa": "Grupa",
+                "typ": "Grupa",
+                "system_gry_id": game_system_id,
+            }
+        )
+        self.repository.save_system(
+            {
+                "nazwa": "Pozycja",
+                "typ": "Inne",
+                "system_gry_id": game_system_id,
+                "system_glowny_id": group_id,
+            }
+        )
+        with self.assertRaisesRegex(ValueError, "Nie można zmienić typu grupy"):
+            self.repository.save_system(
+                {
+                    "nazwa": "Grupa",
+                    "typ": "Inne",
+                    "system_gry_id": game_system_id,
+                },
+                group_id,
             )
 
     def test_system_prices_year_and_isbn_are_preserved(self) -> None:

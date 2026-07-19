@@ -4,12 +4,12 @@ Punktem odniesienia są `CLAUDE.MD` i sekcja funkcjonalności oraz changelogu z 
 
 ## Funkcje pokryte
 
-| Obszar źródłowy | Stan portu GTK4 0.8.5 |
+| Obszar źródłowy | Stan portu GTK4 0.8.6 |
 |---|---|
 | Cztery oddzielne bazy SQLite projektu źródłowego | Zachowane bez dodawania tabel planszówkowych: systemy, sesje, gracze i wydawcy |
 | Osobna kolekcja planszówek i karcianek | Dodana w niezależnym pliku `planszowe.db`, bez zmiany czterech baz źródłowych |
-| Systemy RPG, podręczniki i suplementy | CRUD oraz hierarchia system, podręcznik nadrzędny i pozycje podrzędne |
-| Status kolekcji i status gry | Dostępne w formularzu oraz tabeli. Wiersze Systemów RPG mają kolory zależne od statusu |
+| Systemy RPG, podręczniki i suplementy | CRUD oraz hierarchia system, grupa organizacyjna i przypisane pozycje |
+| Status kolekcji i status gry | Dostępne w formularzu oraz tabeli. Kolorowanie całych wierszy zostało wycofane z powodu ograniczeń i stabilności Gtk.ColumnView |
 | Fizyczne, PDF, VTT, język | Dostępne |
 | Ceny zakupu i sprzedaży, waluty | Ceny fizyczna, PDF i VTT są warunkowe. Cena łączna jest wyliczana automatycznie. Cena sprzedaży jest widoczna tylko dla `Na sprzedaż` lub `Sprzedane` |
 | Rok wydania i ISBN | Dostępne |
@@ -47,4 +47,4 @@ Punktem odniesienia są `CLAUDE.MD` i sekcja funkcjonalności oraz changelogu z 
 
 ## Wnioski
 
-Wersja 0.8.5 usuwa nieobsługiwane manipulowanie prywatnymi widgetami wierszy Gtk.ColumnView. Port zachowuje podstawowy przepływ pracy programu źródłowego: katalog kolekcji RPG, sesje, gracze, wydawcy, statystyki, filtry, transfer i bezpieczeństwo czterech baz. Wersja 0.8.5 obejmuje kolekcję planszówek i karcianek jako niezależne rozszerzenie w piątym pliku. Nie zmienia schematów czterech baz projektu źródłowego.
+Wersja 0.8.6 usuwa nieobsługiwane manipulowanie prywatnymi widgetami wierszy Gtk.ColumnView. Port zachowuje podstawowy przepływ pracy programu źródłowego: katalog kolekcji RPG, sesje, gracze, wydawcy, statystyki, filtry, transfer i bezpieczeństwo czterech baz. Wersja 0.8.6 obejmuje kolekcję planszówek i karcianek jako niezależne rozszerzenie w piątym pliku. Nie zmienia schematów czterech baz projektu źródłowego.

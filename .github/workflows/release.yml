@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Istniejący tag wydania, np. v0.8.5'
+        description: 'Istniejący tag wydania, np. v0.8.6'
         required: true
         type: string
 

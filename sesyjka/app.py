@@ -174,7 +174,7 @@ class SesyjkaWindow(Adw.ApplicationWindow):
             title.add_css_class("title")
         self.header.set_title_widget(title)
 
-        transfer_button = Gtk.Button.new_from_icon_name("database")
+        transfer_button = Gtk.Button.new_from_icon_name("document-save-symbolic")
         transfer_button.set_tooltip_text("Bazy danych")
         transfer_button.connect("clicked", lambda _button: self.show_transfer())
         self.header.pack_start(transfer_button)
@@ -212,7 +212,7 @@ class SesyjkaWindow(Adw.ApplicationWindow):
         theme_box.append(self.dark_switch)
         self.header.pack_end(theme_box)
 
-        self.update_button = Gtk.Button.new_from_icon_name("software-update-available-symbolic")
+        self.update_button = Gtk.Button.new_from_icon_name("software-update-available")
         self.update_button.set_tooltip_text("Sprawdź aktualizacje")
         self.update_button.connect("clicked", lambda _button: self.check_for_updates(manual=True))
         self.header.pack_end(self.update_button)
@@ -544,8 +544,8 @@ class SesyjkaWindow(Adw.ApplicationWindow):
         dialog = ModalWindow(self, "Instrukcja obsługi", width=760, height=680)
         help_text = (
             "SYSTEMY RPG\n"
-            "Dodawaj systemy gry, podręczniki główne, suplementy, przygody i dodatki. "
-            "Pozycje można przypisywać do systemu oraz podręcznika nadrzędnego. "
+            "Dodawaj systemy gry oraz pozycje typu Podręcznik Główny, Suplement, Inne i Grupa. "
+            "Pozycje można przypisywać do systemu oraz do rekordów typu Grupa. "
             "Tabela obsługuje rozwijanie hierarchii, sortowanie, wyszukiwanie i filtry kolumnowe.\n\n"
             "SESJE RPG\n"
             "Każda sesja wymaga daty, istniejącego systemu i co najmniej jednego gracza. "
@@ -585,6 +585,11 @@ class SesyjkaWindow(Adw.ApplicationWindow):
     def show_history(self) -> None:
         dialog = ModalWindow(self, "Historia zmian", width=720, height=620)
         history_text = (
+            "0.8.6\n"
+            "Dodano typ pozycji Grupa. Tylko rekordy tego typu mogą być wybierane w polu Grupa, "
+            "a lista jest ograniczona do grup z wybranego systemu RPG. Usunięto typy Przygoda i Dodatek z formularza, "
+            "bez zmiany nazw kolumn ani schematu bazy danych. Wycofano kolorowanie wierszy zależne od statusu. "
+            "Przycisk baz danych ponownie używa ikony zapisu, a przycisk aktualizacji ikony software-update-available.\n\n"
             "0.8.5\n"
             "Usunięto nieobsługiwane stylowanie prywatnych widgetów wierszy Gtk.ColumnView, które na części wersji GTK powodowało błędy dostępności i SIGSEGV. "
             "Tabele korzystają teraz wyłącznie z publicznych mechanizmów GTK i bezpiecznego stylu zaznaczenia.\n\n"

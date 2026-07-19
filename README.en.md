@@ -1,10 +1,20 @@
-# Sesyjka GTK4 0.8.5
+# Sesyjka GTK4 0.8.6
 
 A native Linux application built with Python, GTK4 and Libadwaita. It manages tabletop RPG systems, books, supplements, sessions, players, publishers, board games and card games. The four original SQLite databases remain compatible, while board and card games use a separate fifth database.
 
 Result repository: https://github.com/Lioheart/Sesyjka
 
 Original project and attribution: https://github.com/ZuraffPL/sesyjka
+
+## Changes in 0.8.6
+
+- RPG item types are now limited to `Main Rulebook`, `Supplement`, `Other` and the database value `Grupa`
+- only records whose stored type is `Grupa` can be selected in the renamed group field
+- the group selector is restricted to the currently selected RPG system
+- group records cannot be nested, converted or moved to another system while they contain items
+- the existing `system_glowny_id` column and the original database schema remain unchanged
+- collection-status row coloring remains disabled. Tables use the native Adwaita background and selection highlight only
+- the database action uses `document-save-symbolic`, while update checks use `software-update-available`
 
 ## Changes in 0.8.5
 

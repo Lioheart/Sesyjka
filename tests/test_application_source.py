@@ -253,8 +253,10 @@ class ApplicationSourceTests(unittest.TestCase):
         app = (self.root / "sesyjka" / "app.py").read_text(encoding="utf-8")
         transfer = (self.root / "sesyjka" / "transfer.py").read_text(encoding="utf-8")
         dialogs = (self.root / "sesyjka" / "dialogs.py").read_text(encoding="utf-8")
-        self.assertIn('Gtk.Button.new_from_icon_name("database")', app)
-        self.assertNotIn('Gtk.Button.new_from_icon_name("document-save-symbolic")', app)
+        self.assertIn('Gtk.Button.new_from_icon_name("document-save-symbolic")', app)
+        self.assertNotIn('Gtk.Button.new_from_icon_name("database")', app)
+        self.assertIn('Gtk.Button.new_from_icon_name("software-update-available")', app)
+        self.assertNotIn('Gtk.Button.new_from_icon_name("software-update-available-symbolic")', app)
         self.assertIn('confirm_label="Zaimportuj"', transfer)
         self.assertIn('destructive=False', transfer)
         self.assertIn('confirm_label: str = "Usuń"', dialogs)
@@ -321,6 +323,19 @@ class ApplicationSourceTests(unittest.TestCase):
         self.assertIn("PLN, USD, EUR lub GBP", systems)
         self.assertIn("dialog-information-symbolic", systems)
         self.assertIn('currency_code == "GPB"', repository)
+
+    def test_rpg_group_type_replaces_parent_book_selection(self) -> None:
+        systems = (self.root / "sesyjka" / "pages" / "systems.py").read_text(encoding="utf-8")
+        repository = (self.root / "sesyjka" / "repository.py").read_text(encoding="utf-8")
+        self.assertIn('ITEM_TYPES = (', systems)
+        for value in ("Podręcznik Główny", "Suplement", "Inne", "Grupa"):
+            self.assertIn(f'"{value}"', systems)
+        self.assertNotIn('["Podręcznik Główny", "Suplement", "Przygoda", "Dodatek", "Inne"]', systems)
+        self.assertIn('form.add_row("Grupa", group_selector)', systems)
+        self.assertIn('item_type.text() != "Grupa"', systems)
+        self.assertIn('str(row.get("typ") or "").casefold() == "grupa"', systems)
+        self.assertIn('wyłącznie pozycję typu Grupa', repository)
+        self.assertIn('normalized["system_glowny_id"] = None', repository)
 
 
 if __name__ == "__main__":
