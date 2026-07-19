@@ -78,14 +78,17 @@ class ApplicationSourceTests(unittest.TestCase):
         self.assertNotIn("Szczegóły:", page_source)
         self.assertNotIn("detail_table", page_source)
 
-    def test_statistics_contains_explicit_section_separator(self) -> None:
+    def test_statistics_contains_chart_and_table_separators(self) -> None:
         page_source = (self.root / "sesyjka" / "pages" / "statistics.py").read_text(
             encoding="utf-8"
         )
         app_source = (self.root / "sesyjka" / "app.py").read_text(encoding="utf-8")
         self.assertIn("Gtk.Separator", page_source)
         self.assertIn("statistics-section-separator", page_source)
+        self.assertIn("statistics-table-separator", page_source)
+        self.assertIn("spacing=12", page_source)
         self.assertIn(".statistics-section-separator", app_source)
+        self.assertIn(".statistics-table-separator", app_source)
 
     def test_context_menu_actions_have_symbolic_icons(self) -> None:
         source = (self.root / "sesyjka" / "widgets.py").read_text(encoding="utf-8")
@@ -158,6 +161,85 @@ class ApplicationSourceTests(unittest.TestCase):
         self.assertIn("cena_sprzedazy", systems)
         self.assertIn("Eksport folderu", transfer)
         self.assertIn("Tryb gościa", transfer)
+
+    def test_board_games_tab_and_separate_database_are_integrated(self) -> None:
+        app = (self.root / "sesyjka" / "app.py").read_text(encoding="utf-8")
+        config = (self.root / "sesyjka" / "config.py").read_text(encoding="utf-8")
+        database = (self.root / "sesyjka" / "database_manager.py").read_text(encoding="utf-8")
+        page = (self.root / "sesyjka" / "pages" / "board_games.py").read_text(encoding="utf-8")
+        statistics = (self.root / "sesyjka" / "repository.py").read_text(encoding="utf-8")
+        self.assertIn('"board_games": BoardGamesPage', app)
+        self.assertIn('"Gry planszowe"', app)
+        self.assertIn('"planszowe.db"', config)
+        self.assertIn("CREATE TABLE IF NOT EXISTS planszowe", database)
+        for token in ("min_graczy", "max_graczy", "czas_min", "minimalny_wiek", "status_kolekcja"):
+            self.assertIn(token, page)
+        self.assertIn('"Planszówki/Karcianki"', statistics)
+
+    def test_rpg_form_contains_dynamic_prices_and_automatic_total(self) -> None:
+        systems = (self.root / "sesyjka" / "pages" / "systems.py").read_text(encoding="utf-8")
+        widgets = (self.root / "sesyjka" / "widgets.py").read_text(encoding="utf-8")
+        for token in (
+            '"Formaty"',
+            '"Cena fizyczna"',
+            '"Cena VTT"',
+            '"Cena PDF"',
+            '"Cena łączna"',
+            "update_total",
+            "update_visibility",
+            "set_editable(False)",
+            '{"Na sprzedaż", "Sprzedane"}',
+        ):
+            self.assertIn(token, systems)
+        self.assertIn("set_row_visible", widgets)
+
+    def test_rpg_rows_are_colored_by_collection_status(self) -> None:
+        systems = (self.root / "sesyjka" / "pages" / "systems.py").read_text(encoding="utf-8")
+        widgets = (self.root / "sesyjka" / "widgets.py").read_text(encoding="utf-8")
+        app = (self.root / "sesyjka" / "app.py").read_text(encoding="utf-8")
+        self.assertIn('record.get("status_kolekcja")', systems)
+        self.assertNotIn('self._status_css(record.get("status_gra"))', systems)
+        for css_class in (
+            "status-collection-owned",
+            "status-collection-for-sale",
+            "status-collection-sold",
+            "status-collection-not-owned",
+            "status-collection-wishlist",
+            "status-collection-loaned",
+            "status-collection-mixed",
+        ):
+            self.assertIn(css_class, systems)
+            self.assertIn(css_class, widgets)
+            self.assertIn(f".{css_class}", app)
+
+    def test_database_button_and_import_confirmation_are_semantic(self) -> None:
+        app = (self.root / "sesyjka" / "app.py").read_text(encoding="utf-8")
+        transfer = (self.root / "sesyjka" / "transfer.py").read_text(encoding="utf-8")
+        dialogs = (self.root / "sesyjka" / "dialogs.py").read_text(encoding="utf-8")
+        self.assertIn('drive-harddisk-symbolic', app)
+        self.assertNotIn('Gtk.Button.new_from_icon_name("document-save-symbolic")', app)
+        self.assertIn('confirm_label="Zaimportuj"', transfer)
+        self.assertIn('destructive=False', transfer)
+        self.assertIn('confirm_label: str = "Usuń"', dialogs)
+        self.assertIn('"suggested-action"', dialogs)
+
+    def test_statistics_include_total_collection_value(self) -> None:
+        page = (self.root / "sesyjka" / "pages" / "statistics.py").read_text(encoding="utf-8")
+        repository = (self.root / "sesyjka" / "repository.py").read_text(encoding="utf-8")
+        self.assertIn('"Wartość pozycji"', repository)
+        self.assertIn('cena_zakupu', repository)
+        self.assertIn('item.get("cena")', repository)
+        self.assertIn('clickable = label in charts', page)
+
+    def test_session_calendar_export_is_available_in_ics_and_csv(self) -> None:
+        transfer = (self.root / "sesyjka" / "transfer.py").read_text(encoding="utf-8")
+        repository = (self.root / "sesyjka" / "repository.py").read_text(encoding="utf-8")
+        self.assertIn("Sesje do ICS", transfer)
+        self.assertIn("Sesje do CSV", transfer)
+        self.assertIn("export_sessions_ics", repository)
+        self.assertIn("BEGIN:VCALENDAR", repository)
+        self.assertIn("export_sessions_csv", repository)
+        self.assertIn('"All Day Event"', repository)
 
 
 if __name__ == "__main__":

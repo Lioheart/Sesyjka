@@ -29,9 +29,9 @@ Architecture: all
 Maintainer: Lioheart <noreply@github.com>
 Depends: python3 (>= 3.10), python3-gi, gir1.2-gtk-4.0, gir1.2-adw-1, python3-openpyxl, pkexec
 Homepage: https://github.com/Lioheart/Sesyjka
-Description: GTK4 application for tabletop RPG collections and sessions
+Description: GTK4 application for RPG, board-game and card-game collections
  Sesyjka manages RPG systems, books, supplements, sessions, players,
- publishers, statistics and compatible SQLite databases.
+ publishers, board games, card games, statistics and compatible SQLite databases.
 CONTROL
 
 cat > "$ROOT/DEBIAN/postinst" <<'POSTINST'

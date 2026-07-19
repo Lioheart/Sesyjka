@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterator, Sequence
 
-from .config import DB_FILES, data_dir
+from .config import CORE_DB_FILES, DB_FILES, data_dir
 
 
 class ReadOnlyDatabaseError(PermissionError):
@@ -24,6 +24,7 @@ class DatabaseManager:
         "sesje_rpg.db": "sesje_rpg",
         "gracze.db": "gracze",
         "wydawcy.db": "wydawcy",
+        "planszowe.db": "planszowe",
     }
     SCHEMA_REQUIREMENTS: dict[str, dict[str, set[str]]] = {
         "wydawcy.db": {
@@ -85,6 +86,25 @@ class DatabaseManager:
             "sesje_gracze": {"sesja_id", "gracz_id"},
             "sesje_notatki": {"sesja_id", "tresc", "data_modyfikacji"},
         },
+        "planszowe.db": {
+            "planszowe": {
+                "id",
+                "nazwa",
+                "typ",
+                "min_graczy",
+                "max_graczy",
+                "czas_min",
+                "czas_max",
+                "minimalny_wiek",
+                "cena",
+                "waluta",
+                "status_gra",
+                "status_kolekcja",
+                "wydawca",
+                "rok_wydania",
+                "notatki",
+            },
+        },
     }
 
     def __init__(self, root: Path | None = None) -> None:
@@ -107,10 +127,11 @@ class DatabaseManager:
 
     def enter_guest_mode(self, source: Path) -> None:
         source = Path(source)
-        missing = [name for name in DB_FILES if not (source / name).is_file()]
+        missing = [name for name in CORE_DB_FILES if not (source / name).is_file()]
         if missing:
             raise ValueError("Brak wymaganych baz: " + ", ".join(missing))
-        self._validate_database_files(source, list(DB_FILES), require_current_schema=True)
+        found = [name for name in DB_FILES if (source / name).is_file()]
+        self._validate_database_files(source, found, require_current_schema=True)
         self._guest_root = source
 
     def leave_guest_mode(self) -> None:
@@ -151,6 +172,7 @@ class DatabaseManager:
         self._init_players()
         self._init_systems()
         self._init_sessions()
+        self._init_board_games()
 
     def _backup_before_schema_update(self) -> Path | None:
         existing = [self._own_root / name for name in DB_FILES if (self._own_root / name).is_file()]
@@ -370,6 +392,55 @@ class DatabaseManager:
                 },
             )
 
+
+    def _init_board_games(self) -> None:
+        with self.connect("planszowe.db", write=True) as connection:
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS planszowe (
+                    id INTEGER PRIMARY KEY,
+                    nazwa TEXT NOT NULL,
+                    typ TEXT NOT NULL DEFAULT 'Gra planszowa',
+                    min_graczy INTEGER NOT NULL DEFAULT 1,
+                    max_graczy INTEGER NOT NULL DEFAULT 1,
+                    czas_min INTEGER,
+                    czas_max INTEGER,
+                    minimalny_wiek INTEGER,
+                    cena REAL,
+                    waluta TEXT DEFAULT 'PLN',
+                    status_gra TEXT DEFAULT 'Nie grane',
+                    status_kolekcja TEXT DEFAULT 'W kolekcji',
+                    wydawca TEXT,
+                    rok_wydania INTEGER,
+                    notatki TEXT
+                )
+                """
+            )
+            self._ensure_columns(
+                connection,
+                "planszowe",
+                {
+                    "typ": "TEXT NOT NULL DEFAULT 'Gra planszowa'",
+                    "min_graczy": "INTEGER NOT NULL DEFAULT 1",
+                    "max_graczy": "INTEGER NOT NULL DEFAULT 1",
+                    "czas_min": "INTEGER",
+                    "czas_max": "INTEGER",
+                    "minimalny_wiek": "INTEGER",
+                    "cena": "REAL",
+                    "waluta": "TEXT DEFAULT 'PLN'",
+                    "status_gra": "TEXT DEFAULT 'Nie grane'",
+                    "status_kolekcja": "TEXT DEFAULT 'W kolekcji'",
+                    "wydawca": "TEXT",
+                    "rok_wydania": "INTEGER",
+                    "notatki": "TEXT",
+                },
+            )
+
+    def has_active_database(self, filename: str) -> bool:
+        if filename not in DB_FILES:
+            return False
+        return self.path(filename).is_file()
+
     def next_id(self, filename: str, table: str) -> int:
         with self.connect(filename) as connection:
             row = connection.execute(f"SELECT MAX(id) AS max_id FROM {table}").fetchone()
@@ -414,6 +485,7 @@ class DatabaseManager:
             "sesje_rpg.db": "Sesje RPG",
             "gracze.db": "Gracze",
             "wydawcy.db": "Wydawcy",
+            "planszowe.db": "Gry planszowe",
         }
         for filename in DB_FILES:
             source = self.path(filename, own=True)

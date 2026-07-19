@@ -8,6 +8,16 @@ import gi
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gdk, Gio, GObject, Gtk, Pango
 
+ROW_STYLE_CLASSES = (
+    "status-collection-owned",
+    "status-collection-for-sale",
+    "status-collection-sold",
+    "status-collection-not-owned",
+    "status-collection-wishlist",
+    "status-collection-loaned",
+    "status-collection-mixed",
+)
+
 
 class TableRow(GObject.Object):
     def __init__(self, record: dict[str, Any], values: Sequence[str]) -> None:
@@ -264,6 +274,11 @@ class DataTable(Gtk.Box):
                 label.add_css_class("heading")
             else:
                 label.remove_css_class("heading")
+            for css_class in ROW_STYLE_CLASSES:
+                label.remove_css_class(css_class)
+            row_css_class = str(row.record.get("_row_css_class") or "")
+            if row_css_class in ROW_STYLE_CLASSES:
+                label.add_css_class(row_css_class)
 
     @staticmethod
     def _compare_rows(left: TableRow, right: TableRow, key: str) -> Gtk.Ordering:
@@ -623,6 +638,7 @@ class FormGrid(Gtk.Grid):
         self.set_column_spacing(12)
         self.set_hexpand(True)
         self._row = 0
+        self._labels: dict[int, Gtk.Label] = {}
 
     def add_row(self, label: str, widget: Gtk.Widget) -> Gtk.Widget:
         title = Gtk.Label(label=label, xalign=0.0)
@@ -630,8 +646,15 @@ class FormGrid(Gtk.Grid):
         widget.set_hexpand(True)
         self.attach(title, 0, self._row, 1, 1)
         self.attach(widget, 1, self._row, 1, 1)
+        self._labels[id(widget)] = title
         self._row += 1
         return widget
+
+    def set_row_visible(self, widget: Gtk.Widget, visible: bool) -> None:
+        widget.set_visible(visible)
+        label = self._labels.get(id(widget))
+        if label is not None:
+            label.set_visible(visible)
 
     def add_full(self, widget: Gtk.Widget) -> Gtk.Widget:
         widget.set_hexpand(True)

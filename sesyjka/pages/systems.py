@@ -59,6 +59,30 @@ class SystemsPage(CrudPage):
             ],
         ]
 
+    @staticmethod
+    def _collection_status_css(status: Any) -> str:
+        normalized = str(status or "W kolekcji").strip().casefold()
+        return {
+            "w kolekcji": "status-collection-owned",
+            "na sprzedaż": "status-collection-for-sale",
+            "sprzedane": "status-collection-sold",
+            "nieposiadane": "status-collection-not-owned",
+            "do kupienia": "status-collection-wishlist",
+            "pożyczone": "status-collection-loaned",
+        }.get(normalized, "status-collection-not-owned")
+
+    @classmethod
+    def _group_collection_status_css(cls, records: list[dict[str, Any]]) -> str:
+        statuses = {
+            str(item.get("status_kolekcja") or "W kolekcji").strip().casefold()
+            for item in records
+        }
+        if not statuses:
+            return "status-collection-not-owned"
+        if len(statuses) == 1:
+            return cls._collection_status_css(next(iter(statuses)))
+        return "status-collection-mixed"
+
     def load_records(self) -> list[dict[str, Any]]:
         positions = self.repository.systems()
         positions_by_game: dict[int, list[dict[str, Any]]] = defaultdict(list)
@@ -70,6 +94,7 @@ class SystemsPage(CrudPage):
             child["pdf_tekst"] = "Tak" if record.get("pdf") else ""
             child["_context_enabled"] = True
             child["_is_entity"] = True
+            child["_row_css_class"] = self._collection_status_css(record.get("status_kolekcja"))
             game_id = record.get("system_gry_id")
             if game_id is None:
                 orphaned.append(child)
@@ -124,7 +149,8 @@ class SystemsPage(CrudPage):
         groups: list[dict[str, Any]] = []
         for game in self.repository.game_systems():
             game_id = int(game["id"])
-            children = build_book_tree(positions_by_game.pop(game_id, []))
+            game_records = positions_by_game.pop(game_id, [])
+            children = build_book_tree(game_records)
             groups.append(
                 {
                     "id": f"S{game_id}",
@@ -142,6 +168,7 @@ class SystemsPage(CrudPage):
                     "_depth": 0,
                     "_group_id": f"system:{game_id}",
                     "_context_enabled": True,
+                    "_row_css_class": self._group_collection_status_css(game_records),
                     "_children": children,
                 }
             )
@@ -159,6 +186,7 @@ class SystemsPage(CrudPage):
                     "_depth": 0,
                     "_group_id": f"missing:{missing_game_id}",
                     "_context_enabled": False,
+                    "_row_css_class": self._group_collection_status_css(records),
                     "_children": children,
                 }
             )
@@ -175,6 +203,7 @@ class SystemsPage(CrudPage):
                     "_depth": 0,
                     "_group_id": "orphans",
                     "_context_enabled": False,
+                    "_row_css_class": self._group_collection_status_css(orphaned),
                     "_children": build_book_tree(orphaned),
                 }
             )
@@ -318,8 +347,8 @@ class SystemsPage(CrudPage):
         dialog = ModalWindow(
             self.parent_window,
             "Edytuj pozycję RPG" if record else "Dodaj pozycję RPG",
-            width=700,
-            height=780,
+            width=720,
+            height=820,
         )
         form = FormGrid()
         name = make_entry(record.get("nazwa") if record else "", "Nazwa pozycji")
@@ -330,10 +359,7 @@ class SystemsPage(CrudPage):
         )
         game_choices = [
             Choice(None, "Brak"),
-            *[
-                Choice(int(row["id"]), str(row["nazwa"]))
-                for row in self.repository.game_systems()
-            ],
+            *[Choice(int(row["id"]), str(row["nazwa"])) for row in self.repository.game_systems()],
         ]
         game_system = ChoiceDropDown(game_choices, record.get("system_gry_id") if record else None)
 
@@ -346,10 +372,7 @@ class SystemsPage(CrudPage):
         parent_choices = [
             Choice(None, "Brak"),
             *[
-                Choice(
-                    int(row["id"]),
-                    f"{row.get('system_gry_nazwa') or 'Bez systemu'} - {row['nazwa']}",
-                )
+                Choice(int(row["id"]), f"{row.get('system_gry_nazwa') or 'Bez systemu'} - {row['nazwa']}")
                 for row in main_books
             ],
         ]
@@ -363,52 +386,107 @@ class SystemsPage(CrudPage):
         language = make_entry(record.get("jezyk") if record else "", "Język")
         supplement_type = make_entry(record.get("typ_suplementu") if record else "", "Np. bestiariusz, starter")
         game_status = TextDropDown(
-            ["Nie grane", "Grane", "Ukończone", "Planowane"],
+            ["Nie grane", "Grane"],
             str(record.get("status_gra") or "Nie grane") if record else "Nie grane",
         )
         collection_status = TextDropDown(
             ["W kolekcji", "Na sprzedaż", "Sprzedane", "Nieposiadane", "Do kupienia", "Pożyczone"],
             str(record.get("status_kolekcja") or "W kolekcji") if record else "W kolekcji",
         )
+
         physical = Gtk.CheckButton(label="Egzemplarz fizyczny")
         physical.set_active(bool(record and record.get("fizyczny")))
-        pdf = Gtk.CheckButton(label="Plik PDF")
+        vtt_enabled = Gtk.CheckButton(label="VTT")
+        vtt_enabled.set_active(bool(record and record.get("vtt")))
+        pdf = Gtk.CheckButton(label="PDF")
         pdf.set_active(bool(record and record.get("pdf")))
-        vtt = make_entry(record.get("vtt") if record else "", "Platforma VTT")
-        price_physical = make_entry(record.get("cena_fiz") if record else "", "Cena fizyczna")
-        price_pdf = make_entry(record.get("cena_pdf") if record else "", "Cena PDF")
-        price_vtt = make_entry(record.get("cena_vtt") if record else "", "Cena VTT")
-        purchase_price = make_entry(record.get("cena_zakupu") if record else "", "Cena zakupu łączna")
+        formats = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=18)
+        formats.append(physical)
+        formats.append(vtt_enabled)
+        formats.append(pdf)
+
+        vtt_platform = make_entry(record.get("vtt") if record else "", "Np. Foundry VTT, Roll20")
+        physical_value = record.get("cena_fiz") if record else ""
+        pdf_value = record.get("cena_pdf") if record else ""
+        vtt_value = record.get("cena_vtt") if record else ""
+        legacy_total = record.get("cena_zakupu") if record else None
+        selected_formats = sum((physical.get_active(), pdf.get_active(), vtt_enabled.get_active()))
+        if legacy_total not in (None, "") and all(value in (None, "") for value in (physical_value, pdf_value, vtt_value)) and selected_formats == 1:
+            if physical.get_active():
+                physical_value = legacy_total
+            elif pdf.get_active():
+                pdf_value = legacy_total
+            else:
+                vtt_value = legacy_total
+        price_physical = make_entry(physical_value, "Cena fizyczna")
+        price_pdf = make_entry(pdf_value, "Cena PDF")
+        price_vtt = make_entry(vtt_value, "Cena VTT")
+        purchase_price = make_entry("", "Wyliczana automatycznie")
+        purchase_price.set_editable(False)
+        purchase_price.set_can_focus(False)
         currency = make_entry(record.get("waluta_zakupu") if record else "PLN", "Waluta zakupu")
         sale_price = make_entry(record.get("cena_sprzedazy") if record else "", "Cena sprzedaży")
-        sale_currency = make_entry(
-            record.get("waluta_sprzedazy") if record else "PLN",
-            "Waluta sprzedaży",
-        )
+        sale_currency = make_entry(record.get("waluta_sprzedazy") if record else "PLN", "Waluta sprzedaży")
         year = make_entry(record.get("rok_wydania") if record else "", "RRRR")
         isbn = make_entry(record.get("isbn") if record else "", "ISBN")
+
         form.add_row("Nazwa *", name)
         form.add_row("Typ *", item_type)
-        form.add_row("System RPG", game_system)
+        form.add_row("System RPG *", game_system)
         form.add_row("Podręcznik nadrzędny", parent_book)
         form.add_row("Wydawca", publisher_row)
+        form.add_row("Formaty", formats)
         form.add_row("Język", language)
-        form.add_row("Podgrupa suplementu", supplement_type)
         form.add_row("Status gry", game_status)
         form.add_row("Status kolekcji", collection_status)
-        form.add_full(physical)
-        form.add_full(pdf)
-        form.add_row("VTT", vtt)
+        form.add_row("Rok wydania", year)
+        form.add_row("Numer ISBN", isbn)
+        form.add_row("Podgrupa suplementu", supplement_type)
+        form.add_row("Platforma VTT", vtt_platform)
         form.add_row("Cena fizyczna", price_physical)
-        form.add_row("Cena PDF", price_pdf)
         form.add_row("Cena VTT", price_vtt)
-        form.add_row("Cena zakupu łączna", purchase_price)
+        form.add_row("Cena PDF", price_pdf)
+        form.add_row("Cena łączna", purchase_price)
         form.add_row("Waluta zakupu", currency)
         form.add_row("Cena sprzedaży", sale_price)
         form.add_row("Waluta sprzedaży", sale_currency)
-        form.add_row("Rok wydania", year)
-        form.add_row("ISBN", isbn)
         dialog.add_scrolled_content(form)
+
+        def parse_price(entry: Gtk.Entry) -> float:
+            text = entry.get_text().strip().replace(",", ".")
+            if not text:
+                return 0.0
+            try:
+                return max(float(text), 0.0)
+            except ValueError:
+                return 0.0
+
+        def update_total(*_args: object) -> None:
+            total = 0.0
+            if physical.get_active():
+                total += parse_price(price_physical)
+            if pdf.get_active():
+                total += parse_price(price_pdf)
+            if vtt_enabled.get_active():
+                total += parse_price(price_vtt)
+            purchase_price.set_text(f"{total:.2f}")
+
+        def update_visibility(*_args: object) -> None:
+            form.set_row_visible(vtt_platform, vtt_enabled.get_active())
+            form.set_row_visible(price_physical, physical.get_active())
+            form.set_row_visible(price_pdf, pdf.get_active())
+            form.set_row_visible(price_vtt, vtt_enabled.get_active())
+            selling = collection_status.text() in {"Na sprzedaż", "Sprzedane"}
+            form.set_row_visible(sale_price, selling)
+            form.set_row_visible(sale_currency, selling)
+            update_total()
+
+        for toggle in (physical, pdf, vtt_enabled):
+            toggle.connect("toggled", update_visibility)
+        collection_status.connect("notify::selected", update_visibility)
+        for entry in (price_physical, price_pdf, price_vtt):
+            entry.connect("changed", update_total)
+        update_visibility()
 
         def save() -> None:
             try:
@@ -421,6 +499,10 @@ class SystemsPage(CrudPage):
                 if selected_game_system_id is None:
                     raise ValueError("Przypisz pozycję do systemu RPG.")
 
+                vtt_name = vtt_platform.get_text().strip() if vtt_enabled.get_active() else ""
+                if vtt_enabled.get_active() and not vtt_name:
+                    raise ValueError("Wpisz nazwę platformy VTT.")
+                selling = collection_status.text() in {"Na sprzedaż", "Sprzedane"}
                 self.repository.save_system(
                     {
                         "nazwa": name.get_text(),
@@ -434,14 +516,14 @@ class SystemsPage(CrudPage):
                         "status_kolekcja": collection_status.text(),
                         "fizyczny": physical.get_active(),
                         "pdf": pdf.get_active(),
-                        "vtt": vtt.get_text(),
-                        "cena_fiz": price_physical.get_text(),
-                        "cena_pdf": price_pdf.get_text(),
-                        "cena_vtt": price_vtt.get_text(),
+                        "vtt": vtt_name,
+                        "cena_fiz": price_physical.get_text() if physical.get_active() else None,
+                        "cena_pdf": price_pdf.get_text() if pdf.get_active() else None,
+                        "cena_vtt": price_vtt.get_text() if vtt_enabled.get_active() else None,
                         "cena_zakupu": purchase_price.get_text(),
                         "waluta_zakupu": currency.get_text(),
-                        "cena_sprzedazy": sale_price.get_text(),
-                        "waluta_sprzedazy": sale_currency.get_text(),
+                        "cena_sprzedazy": sale_price.get_text() if selling else None,
+                        "waluta_sprzedazy": sale_currency.get_text() if selling else None,
                         "rok_wydania": year.get_text(),
                         "isbn": isbn.get_text(),
                         "system_glowny_nazwa_custom": record.get("system_glowny_nazwa_custom") if record else None,

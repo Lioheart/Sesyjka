@@ -4,25 +4,26 @@ Punktem odniesienia są `CLAUDE.MD` i sekcja funkcjonalności oraz changelogu z 
 
 ## Funkcje pokryte
 
-| Obszar źródłowy | Stan portu GTK4 0.7.0 |
+| Obszar źródłowy | Stan portu GTK4 0.8.1 |
 |---|---|
-| Cztery oddzielne bazy SQLite | Zachowane: systemy, sesje, gracze i wydawcy |
+| Cztery oddzielne bazy SQLite projektu źródłowego | Zachowane bez dodawania tabel planszówkowych: systemy, sesje, gracze i wydawcy |
+| Osobna kolekcja planszówek i karcianek | Dodana w niezależnym pliku `planszowe.db`, bez zmiany czterech baz źródłowych |
 | Systemy RPG, podręczniki i suplementy | CRUD oraz hierarchia system, podręcznik nadrzędny i pozycje podrzędne |
-| Status kolekcji i status gry | Dostępne w formularzu oraz tabeli |
+| Status kolekcji i status gry | Dostępne w formularzu oraz tabeli. Wiersze Systemów RPG mają kolory zależne od statusu |
 | Fizyczne, PDF, VTT, język | Dostępne |
-| Ceny zakupu i sprzedaży, waluty | Dostępne, także ceny osobne dla fizycznego, PDF i VTT |
+| Ceny zakupu i sprzedaży, waluty | Ceny fizyczna, PDF i VTT są warunkowe. Cena łączna jest wyliczana automatycznie. Cena sprzedaży jest widoczna tylko dla `Na sprzedaż` lub `Sprzedane` |
 | Rok wydania i ISBN | Dostępne |
 | Wydawca pozycji i systemu | Dostępny, z szybkim dodawaniem wydawcy z formularza |
 | Sortowanie hierarchii | Sortowanie rodzeństwa bez rozrywania relacji nadrzędnych |
 | Sortowanie tabel płaskich | Kliknięcie nagłówka kolumny |
 | Wyszukiwanie i filtry | Filtr globalny, filtry każdej kolumny i wyszukiwanie w rozwijanych listach |
 | Menu prawego przycisku | Edycja i usuwanie z ikonami symbolicznymi |
-| Sesje RPG | Data, system, gracze, MG, GM-less, kampania, jednostrzał, tryb gry, tytuły i notatki |
+| Sesje RPG | Data, system, gracze, MG, GM-less, kampania, jednostrzał, tryb gry, tytuły i notatki. Eksport do iCalendar i CSV kalendarza |
 | Grupy graczy | Tagi rozdzielane przecinkami i szybkie zaznaczanie grupy w sesji |
 | Blokada sesji bez graczy | Walidacja w formularzu i repozytorium |
 | Gracze | CRUD, dane opisowe, grupa, główny użytkownik i ważny gracz |
 | Wydawcy | CRUD, kraj, strona WWW i powiązanie z katalogiem |
-| Statystyki | Liczniki, zestawienia, wykresy ilości i automatyczne odświeżanie po CRUD |
+| Statystyki | Liczniki, zestawienia, wykresy ilości i automatyczne odświeżanie po CRUD. Osobny licznik Planszówki/Karcianki i wykres z podziałem na oba typy |
 | Transfer baz | ZIP, folder, XLSX, import ZIP i folderu, backup oraz walidacja |
 | Tryb gościa | Połączenia SQLite `mode=ro` i blokada operacji zapisu |
 | Motyw i skala tekstu | Jasny i ciemny Adwaita, skala od 80 do 140 procent |
@@ -40,10 +41,10 @@ Punktem odniesienia są `CLAUDE.MD` i sekcja funkcjonalności oraz changelogu z 
 | Graficzny kalendarz dat | Zastąpiony walidowanym polem `RRRR-MM-DD` |
 | Wykresy Matplotlib | Zastąpione natywnymi, dostępnymi wykresami ilości GTK4 |
 | Zapamiętywanie szerokości każdej kolumny | Kolumny można zmieniać, ale ich szerokości nie są jeszcze zapisywane |
-| Trójkolorowe reguły wierszy systemów | Hierarchia i zaznaczenie są zachowane, dokładna paleta źródłowa nie została odtworzona |
+| Reguły kolorowania wierszy systemów | Zaimplementowane kolory Adwaita dla statusów Grane, Nie grane, Planowane i Ukończone |
 | Wielokrotny selektor typów suplementów | Pole podgrupy jest elastycznym tekstem i może przechowywać kilka tagów rozdzielonych przecinkami |
 | Osobny ekran historii uczestnictwa gracza | Udział graczy jest dostępny w statystykach, bez osobnego widoku historii |
 
 ## Wnioski
 
-Port zachowuje podstawowy przepływ pracy programu źródłowego: katalog kolekcji, sesje, gracze, wydawcy, statystyki, filtry, transfer i bezpieczeństwo czterech baz. Różnice dotyczą głównie funkcji prezentacyjnych i dodatkowego UX, a nie podstawowych operacji CRUD ani zgodności danych.
+Port zachowuje podstawowy przepływ pracy programu źródłowego: katalog kolekcji RPG, sesje, gracze, wydawcy, statystyki, filtry, transfer i bezpieczeństwo czterech baz. Wersja 0.8.1 obejmuje kolekcję planszówek i karcianek jako niezależne rozszerzenie w piątym pliku. Nie zmienia schematów czterech baz projektu źródłowego.

@@ -39,7 +39,7 @@ class StatisticsPage(Gtk.Box):
 
         self.cards = Gtk.FlowBox()
         self.cards.set_selection_mode(Gtk.SelectionMode.NONE)
-        self.cards.set_max_children_per_line(6)
+        self.cards.set_max_children_per_line(8)
         self.cards.set_min_children_per_line(2)
         self.cards.set_column_spacing(10)
         self.cards.set_row_spacing(10)
@@ -48,9 +48,11 @@ class StatisticsPage(Gtk.Box):
         vertical = Gtk.Paned.new(Gtk.Orientation.VERTICAL)
         vertical.set_vexpand(True)
 
-        summary_paned = Gtk.Paned.new(Gtk.Orientation.HORIZONTAL)
-        summary_paned.set_size_request(-1, 230)
+        summary_tables = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        summary_tables.set_size_request(-1, 230)
         systems_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        systems_box.set_hexpand(True)
+        systems_box.set_vexpand(True)
         systems_heading = Gtk.Label(label="Sesje według systemu", xalign=0.0)
         systems_heading.add_css_class("heading")
         systems_box.append(systems_heading)
@@ -62,6 +64,8 @@ class StatisticsPage(Gtk.Box):
         systems_box.append(self.systems_table)
 
         players_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        players_box.set_hexpand(True)
+        players_box.set_vexpand(True)
         players_heading = Gtk.Label(label="Udział graczy", xalign=0.0)
         players_heading.add_css_class("heading")
         players_box.append(players_heading)
@@ -71,10 +75,12 @@ class StatisticsPage(Gtk.Box):
             enable_filters=False,
         )
         players_box.append(self.players_table)
-        summary_paned.set_start_child(systems_box)
-        summary_paned.set_end_child(players_box)
-        summary_paned.set_position(620)
-        vertical.set_start_child(summary_paned)
+        table_separator = Gtk.Separator(orientation=Gtk.Orientation.VERTICAL)
+        table_separator.add_css_class("statistics-table-separator")
+        summary_tables.append(systems_box)
+        summary_tables.append(table_separator)
+        summary_tables.append(players_box)
+        vertical.set_start_child(summary_tables)
 
         chart_section = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         separator = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
@@ -99,20 +105,28 @@ class StatisticsPage(Gtk.Box):
             child = next_child
         self._card_buttons.clear()
 
-    def _build_card(self, label: str, value: int) -> Gtk.Button:
+    def _build_card(self, label: str, value: Any, *, clickable: bool = True) -> Gtk.Button:
         button = Gtk.Button()
         button.add_css_class("stat-card-button")
         content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         content.add_css_class("stat-card")
-        number = Gtk.Label(label=str(value))
-        number.add_css_class("title-1")
+        number_text = str(value)
+        number = Gtk.Label(label=number_text)
+        number.set_wrap(True)
+        number.set_justify(Gtk.Justification.CENTER)
+        number.set_max_width_chars(22)
+        number.add_css_class("title-2" if len(number_text) > 12 else "title-1")
         caption = Gtk.Label(label=label)
         caption.add_css_class("dim-label")
         content.append(number)
         content.append(caption)
         button.set_child(content)
-        button.set_tooltip_text(f"Pokaż wykres ilości: {label}")
-        button.connect("clicked", lambda _button, selected=label: self.show_chart(selected))
+        if clickable:
+            button.set_tooltip_text(f"Pokaż wykres ilości: {label}")
+            button.connect("clicked", lambda _button, selected=label: self.show_chart(selected))
+        else:
+            button.set_tooltip_text("Łączna cena zakupu wszystkich pozycji RPG, planszówek i karcianek, osobno dla każdej waluty")
+            button.set_can_focus(False)
         return button
 
     def show_chart(self, label: str) -> None:
@@ -133,9 +147,12 @@ class StatisticsPage(Gtk.Box):
         try:
             self._data = self.repository.statistics()
             self._clear_cards()
+            charts = self._data.get("charts", {})
             for label, value in self._data["counts"].items():
-                button = self._build_card(label, int(value))
-                self._card_buttons[label] = button
+                clickable = label in charts
+                button = self._build_card(label, value, clickable=clickable)
+                if clickable:
+                    self._card_buttons[label] = button
                 self.cards.append(button)
             self.systems_table.set_records(
                 [{"name": name, "count": count} for name, count in self._data["systems"]]

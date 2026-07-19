@@ -70,7 +70,15 @@ def info(parent: Gtk.Window, title: str, message: str, error: bool = False) -> N
     dialog.present()
 
 
-def confirm(parent: Gtk.Window, title: str, message: str, callback: Callable[[], None]) -> None:
+def confirm(
+    parent: Gtk.Window,
+    title: str,
+    message: str,
+    callback: Callable[[], None],
+    *,
+    confirm_label: str = "Usuń",
+    destructive: bool = True,
+) -> None:
     dialog = ModalWindow(parent, title, width=460, height=230)
     label = Gtk.Label(label=message, wrap=True, xalign=0.0)
     label.set_vexpand(True)
@@ -78,18 +86,19 @@ def confirm(parent: Gtk.Window, title: str, message: str, callback: Callable[[],
     buttons = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
     buttons.set_halign(Gtk.Align.END)
     cancel = Gtk.Button(label="Anuluj")
-    delete = Gtk.Button(label="Usuń")
-    delete.add_css_class("destructive-action")
+    accept = Gtk.Button(label=confirm_label)
+    accept.add_css_class("destructive-action" if destructive else "suggested-action")
     cancel.connect("clicked", lambda _button: dialog.close())
 
     def accepted(_button: Gtk.Button) -> None:
         dialog.close()
         callback()
 
-    delete.connect("clicked", accepted)
+    accept.connect("clicked", accepted)
     buttons.append(cancel)
-    buttons.append(delete)
+    buttons.append(accept)
     dialog.root_box.append(buttons)
+    dialog.set_default_widget(accept)
     dialog.present()
 
 

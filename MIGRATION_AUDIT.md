@@ -20,23 +20,27 @@
 
 ## Dane
 
-Zachowane są pliki `systemy_rpg.db`, `sesje_rpg.db`, `gracze.db` i `wydawcy.db`. Port utrzymuje tabele `systemy_rpg`, `systemy_gry`, `sesje_rpg`, `sesje_gracze`, `sesje_notatki`, `gracze` oraz `wydawcy`.
+Zachowane są pliki `systemy_rpg.db`, `sesje_rpg.db`, `gracze.db` i `wydawcy.db`. Port utrzymuje tabele `systemy_rpg`, `systemy_gry`, `sesje_rpg`, `sesje_gracze`, `sesje_notatki`, `gracze` oraz `wydawcy`. Nowa funkcja planszówek i karcianek korzysta wyłącznie z osobnego pliku `planszowe.db` i tabeli `planszowe`. Nie dodaje tabel ani kolumn do czterech plików projektu źródłowego.
 
 Przed migracją starszego schematu wszystkie istniejące bazy są kopiowane do `backups/schema-...`. Inicjalizacja tworzy brakujące tabele i kolumny bez usuwania rekordów. Import ZIP i folderu waliduje główne tabele oraz integralność SQLite, a następnie tworzy osobną kopię zapasową przed zastąpieniem danych.
 
-Każde połączenie ustawia `sqlite3.Row` i `PRAGMA foreign_keys = ON`. Relacje wewnątrz jednego pliku SQLite są chronione przez klucze obce. Relacje pomiędzy czterema plikami są sprawdzane w warstwie `Repository` przed zapisem. Usuwanie gracza, wydawcy, systemu gry lub podręcznika jest blokowane, gdy utworzyłoby osierocone odwołanie.
+Każde połączenie ustawia `sqlite3.Row` i `PRAGMA foreign_keys = ON`. Relacje wewnątrz jednego pliku SQLite są chronione przez klucze obce. Relacje pomiędzy czterema bazami projektu źródłowego są sprawdzane w warstwie `Repository` przed zapisem. Usuwanie gracza, wydawcy, systemu gry lub podręcznika jest blokowane, gdy utworzyłoby osierocone odwołanie.
 
 ## Tabele i hierarchia
 
 Widok systemów grupuje rekordy jako system gry, podręcznik główny i pozycje podrzędne. Sortowanie odbywa się wewnątrz gałęzi. Tabele płaskie sortują po kliknięciu nagłówka. Każda tabela CRUD ma filtr globalny, filtry poszczególnych kolumn, zmianę szerokości kolumn, dwuklik i menu prawego przycisku.
 
+## Formularz pozycji RPG
+
+Pola podstawowe są stale widoczne. Pola cen fizycznej, PDF i VTT pojawiają się tylko po zaznaczeniu odpowiedniego formatu. Cena łączna jest wyliczana automatycznie. Cena i waluta sprzedaży są pokazywane tylko dla statusu kolekcji `Na sprzedaż` lub `Sprzedane`.
+
 ## Sesje
 
-Pole System korzysta z `systemy_gry`, a nie z nazw suplementów. Zapis wymaga istniejącego systemu i co najmniej jednego istniejącego gracza. Mistrz gry jest opcjonalny. Grupy graczy mogą być zaznaczane zbiorczo. Notatki są przechowywane w tabeli `sesje_notatki`.
+Pole System korzysta z `systemy_gry`, a nie z nazw suplementów. Zapis wymaga istniejącego systemu i co najmniej jednego istniejącego gracza. Mistrz gry jest opcjonalny. Grupy graczy mogą być zaznaczane zbiorczo. Notatki są przechowywane w tabeli `sesje_notatki`. Sesje można eksportować jako standardowy plik iCalendar `.ics` albo CSV zgodny z typowym importem kalendarza.
 
 ## Statystyki
 
-Agregacja odbywa się w `Repository.statistics()`, poza widgetami. Widok renderuje liczniki, dwie tabele podsumowujące i przełączane wykresy ilości. Po każdej operacji CRUD statystyki są odświeżane przez wspólny mechanizm stron.
+Agregacja odbywa się w `Repository.statistics()`, poza widgetami. Widok renderuje liczniki, dwie tabele podsumowujące i przełączane wykresy ilości. Licznik planszówek i karcianek otwiera wykres z osobnymi słupkami dla obu typów. Po każdej operacji CRUD statystyki są odświeżane przez wspólny mechanizm stron.
 
 ## Linux
 

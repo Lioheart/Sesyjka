@@ -1,6 +1,6 @@
-# Sesyjka GTK4 0.7.0
+# Sesyjka GTK4 0.8.1
 
-Natywna aplikacja dla Linuksa zbudowana w Pythonie, GTK4 i Libadwaita. Program kataloguje systemy RPG, podręczniki, suplementy, sesje, graczy i wydawców. Zachowuje zgodność z czterema bazami SQLite projektu źródłowego.
+Natywna aplikacja dla Linuksa zbudowana w Pythonie, GTK4 i Libadwaita. Program kataloguje systemy RPG, podręczniki, suplementy, sesje, graczy, wydawców oraz gry planszowe i karciane.
 
 Repozytorium wynikowe: https://github.com/Lioheart/Sesyjka
 
@@ -8,13 +8,27 @@ Projekt źródłowy i atrybucja: https://github.com/ZuraffPL/sesyjka
 
 ## Funkcje
 
-Program obsługuje hierarchię systemów gry, podręczników głównych i suplementów. Dostępne są statusy kolekcji i gry, wersje fizyczne, PDF i VTT, język, rok, ISBN, ceny oraz waluty. Tabele mają wyszukiwanie globalne, filtry kolumnowe, sortowanie, zmianę szerokości kolumn i menu kontekstowe.
+Zakładka **Systemy RPG** obsługuje hierarchię systemów gry, podręczników głównych i pozycji podrzędnych. Dostępne są statusy kolekcji i gry, format fizyczny, PDF i VTT, język, rok wydania, ISBN, ceny oraz waluty. Wiersze mają tło zależne od statusu kolekcji. Pozycje w kolekcji są zielone, przeznaczone na sprzedaż żółte, sprzedane czerwone, nieposiadane neutralne, pozycje do kupienia niebieskie, a pożyczone fioletowe. Grupy z różnymi statusami mają delikatne tło akcentowe. Tabele mają wyszukiwanie globalne, filtry kolumnowe, sortowanie, zmianę szerokości kolumn i menu kontekstowe.
 
-Sesje są przypisywane do systemów gry. Formularz obsługuje mistrza gry, sesje GM-less, kampanie, jednostrzały, tryb gry, przygody, notatki i grupy graczy. Zapis sesji bez co najmniej jednego istniejącego gracza jest blokowany.
+Formularz pozycji RPG zawsze pokazuje nazwę, typ, system RPG, wydawcę, formaty, język, status gry, status kolekcji, rok wydania i ISBN. Pola cen fizycznej, VTT i PDF pojawiają się tylko dla zaznaczonych formatów. Cena łączna jest liczona automatycznie. Cena sprzedaży jest dostępna wyłącznie dla statusów `Na sprzedaż` i `Sprzedane`.
 
-Dostępne są statystyki z tabelami podsumowującymi i wykresami ilości, eksport ZIP, eksport do folderu, eksport XLSX, import z walidacją i kopią zapasową oraz tryb gościa tylko do odczytu.
+Zakładka **Sesje RPG** przypisuje sesje do systemów gry. Formularz obsługuje mistrza gry, sesje GM-less, kampanie, jednostrzały, tryb gry, przygody, notatki i grupy graczy. Zapis sesji bez co najmniej jednego istniejącego gracza jest blokowany. Sesje można eksportować do iCalendar `.ics` oraz do formatu `.csv` używanego między innymi przez import kalendarza Google.
 
-## Dane użytkownika
+Zakładka **Gry planszowe** korzysta z osobnej bazy `planszowe.db`. Przechowuje gry planszowe i karciane, zakres liczby graczy, czas rozgrywki, minimalny wiek, cenę, walutę, status gry, status kolekcji, wydawcę, rok wydania i notatki.
+
+Statystyki obejmują systemy RPG, sesje, graczy, wydawców, formaty fizyczne i PDF, łączną liczbę planszówek i karcianek oraz sumę cen zakupu wszystkich pozycji RPG i gier stołowych, podaną osobno dla każdej waluty. Wykres gier stołowych pokazuje osobno planszówki i karcianki. Dwie tabele zestawień są rozdzielone odstępem i pionowym separatorem.
+
+Transfer danych obejmuje eksport ZIP, eksport do folderu, eksport XLSX, eksport sesji do ICS i CSV, import z walidacją i kopią zapasową oraz tryb gościa tylko do odczytu.
+
+## Zmiany w 0.8.1
+
+- kolorowanie pozycji RPG korzysta ze statusu kolekcji, nie statusu gry
+- przycisk baz danych używa ikony dysku danych zamiast dyskietki zapisu
+- potwierdzenie importu ma przycisk `Zaimportuj` oznaczony jako akcja zalecana
+- statystyki pokazują sumę cen zakupu wszystkich pozycji, osobno dla każdej waluty
+- pomiędzy tabelami statystyk dodano odstęp i pionowy separator
+
+## Dane użytkownika i kompatybilność
 
 Domyślne lokalizacje:
 
@@ -31,7 +45,12 @@ systemy_rpg.db
 sesje_rpg.db
 gracze.db
 wydawcy.db
+planszowe.db
 ```
+
+Pierwsze cztery pliki zachowują schematy zgodne z projektem `ZuraffPL/sesyjka`. Nowa funkcja planszówek nie dodaje tabel ani kolumn do tych baz. Jest przechowywana wyłącznie w `planszowe.db`.
+
+Import i tryb gościa nadal akceptują zestaw zawierający tylko cztery oryginalne bazy. W takim przypadku zakładka gier planszowych pozostaje pusta. Eksport tworzony przez wersję 0.8.1 zawiera pięć baz.
 
 Log diagnostyczny:
 
@@ -48,8 +67,6 @@ Pobierz plik `sesyjka_X.Y.Z_all.deb`, a następnie:
 ```bash
 sudo apt install ./sesyjka_X.Y.Z_all.deb
 ```
-
-Pakiet deklaruje zależności GTK4, Libadwaita, PyGObject i openpyxl. Kod aplikacji jest instalowany w `/usr/share/sesyjka`, a program uruchamiający w `/usr/bin/sesyjka`.
 
 Odinstalowanie:
 
@@ -129,28 +146,13 @@ sudo pacman -S python python-gobject gtk4 libadwaita python-openpyxl
 
 ## Aktualizacje
 
-Aplikacja sprawdza najnowsze stabilne wydanie w repozytorium `Lioheart/Sesyjka` podczas uruchamiania, nie częściej niż co 6 godzin. Sprawdzenie można również uruchomić ręcznie przyciskiem aktualizacji w nagłówku lub w oknie „O programie”.
+Aplikacja sprawdza najnowsze stabilne wydanie w repozytorium `Lioheart/Sesyjka` podczas uruchamiania, nie częściej niż co 6 godzin. Sprawdzenie można również uruchomić ręcznie przyciskiem aktualizacji w nagłówku lub w oknie `O programie`.
 
-Po wykryciu nowszej wersji aplikacja:
-
-1. wybiera pakiet odpowiadający kanałowi instalacji, czyli DEB, RPM albo instalator ogólny,
-2. pobiera pakiet i weryfikuje jego sumę SHA-256,
-3. prosi o potwierdzenie uprawnień administratora przez Polkit,
-4. uruchamia `apt-get`, `dnf` albo `install-linux.sh`,
-5. informuje o konieczności ponownego uruchomienia programu.
-
-Lokalna kopia uruchomiona przez `run.sh` nie jest automatycznie nadpisywana. Program otwiera stronę najnowszego wydania.
-
-Automatyczne sprawdzanie można wyłączyć w oknie „O programie”. Brak programu `pkexec` nie blokuje ręcznego pobrania wydania.
+Po wykryciu nowszej wersji aplikacja wybiera pakiet DEB, RPM albo instalator ogólny, pobiera plik, weryfikuje SHA-256 i uruchamia aktualizację przez Polkit. Lokalna kopia uruchomiona przez `run.sh` nie jest automatycznie nadpisywana. W takim przypadku program otwiera stronę najnowszego wydania.
 
 ## Automatyczne budowanie Release
 
-Workflow `.github/workflows/release.yml` uruchamia się po opublikowaniu GitHub Release. Tag musi mieć postać `vX.Y.Z`, a numer musi być zgodny z:
-
-```text
-pyproject.toml
-sesyjka/__init__.py
-```
+Workflow `.github/workflows/release.yml` uruchamia się po opublikowaniu GitHub Release albo ręcznie dla istniejącego tagu. Tag musi mieć postać `vX.Y.Z`, a numer musi być zgodny z `pyproject.toml` i `sesyjka/__init__.py`.
 
 Workflow uruchamia testy i dołącza do Release:
 
@@ -168,10 +170,10 @@ Procedura wydania:
 2. Zatwierdź zmiany w gałęzi `main`.
 3. Utwórz tag `vX.Y.Z` dla tego zatwierdzenia.
 4. Utwórz i opublikuj GitHub Release z tym tagiem.
-5. Poczekaj na zakończenie workflow „Build release packages”.
-6. Sprawdź, czy wszystkie pięć typów zasobów zostało dołączonych do wydania.
+5. Poczekaj na zakończenie workflow `Build release packages`.
+6. Sprawdź komplet plików i `SHA256SUMS`.
 
-Nazwy plików są częścią protokołu aktualizacji. Nie należy ich zmieniać ręcznie.
+Nazwy plików są częścią protokołu aktualizacji i nie powinny być zmieniane ręcznie.
 
 Szczegóły budowania lokalnego znajdują się w [packaging/README.md](packaging/README.md).
 
@@ -183,7 +185,7 @@ python3 -m unittest discover -s tests -v
 bash -n run.sh install-linux.sh uninstall-linux.sh packaging/*.sh
 ```
 
-Testy obejmują CRUD, integralność między bazami, walidację sesji, migrację schematu, transfer danych, tryb gościa, statystyki, skrypty instalacyjne, pakowanie Release oraz aktualizator.
+Testy obejmują CRUD pięciu baz, zgodność zestawu czterech baz projektu źródłowego, walidację sesji, migrację schematu, transfer danych, eksport kalendarza, dynamiczne ceny, statystyki, skrypty instalacyjne, pakowanie Release oraz aktualizator.
 
 ## Licencja
 

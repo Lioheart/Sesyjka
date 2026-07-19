@@ -7,7 +7,8 @@ from pathlib import Path
 from typing import Any
 
 APP_DIR_NAME = "sesyjka"
-DB_FILES = ("systemy_rpg.db", "sesje_rpg.db", "gracze.db", "wydawcy.db")
+CORE_DB_FILES = ("systemy_rpg.db", "sesje_rpg.db", "gracze.db", "wydawcy.db")
+DB_FILES = (*CORE_DB_FILES, "planszowe.db")
 
 
 def data_dir() -> Path:

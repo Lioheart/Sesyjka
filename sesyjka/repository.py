@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import csv
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal, InvalidOperation
+from pathlib import Path
 from typing import Any
 
 from .database_manager import DatabaseManager
@@ -304,12 +307,37 @@ class Repository:
             normalized["system_glowny_id"] = parent_id
         for key in ("fizyczny", "pdf"):
             normalized[key] = int(bool(normalized.get(key)))
+        normalized["vtt"] = _clean(normalized.get("vtt"))
         for key in ("cena_zakupu", "cena_sprzedazy", "cena_fiz", "cena_pdf", "cena_vtt"):
             value = normalized.get(key)
             if value in (None, ""):
                 normalized[key] = None
             else:
-                normalized[key] = float(str(value).replace(",", "."))
+                parsed = float(str(value).replace(",", "."))
+                if parsed < 0:
+                    raise ValueError("Ceny nie mogą być ujemne.")
+                normalized[key] = parsed
+
+        if not normalized["fizyczny"]:
+            normalized["cena_fiz"] = None
+        if not normalized["pdf"]:
+            normalized["cena_pdf"] = None
+        if not normalized["vtt"]:
+            normalized["cena_vtt"] = None
+
+        component_prices = [
+            normalized.get("cena_fiz"),
+            normalized.get("cena_pdf"),
+            normalized.get("cena_vtt"),
+        ]
+        if any(value is not None for value in component_prices):
+            normalized["cena_zakupu"] = round(
+                sum(float(value or 0) for value in component_prices), 2
+            )
+
+        if str(normalized.get("status_kolekcja") or "") not in {"Na sprzedaż", "Sprzedane"}:
+            normalized["cena_sprzedazy"] = None
+
         year = normalized.get("rok_wydania")
         normalized["rok_wydania"] = int(year) if year not in (None, "") else None
         payload = [_clean(normalized.get(field)) for field in fields]
@@ -472,11 +500,231 @@ class Repository:
         with self.db.connect("sesje_rpg.db", write=True) as connection:
             connection.execute("DELETE FROM sesje_rpg WHERE id=?", (record_id,))
 
+    def board_games(self) -> list[dict[str, Any]]:
+        if not self.db.has_active_database("planszowe.db"):
+            return []
+        rows = self.db.table_rows(
+            "planszowe.db",
+            """
+            SELECT id, nazwa, typ, min_graczy, max_graczy, czas_min, czas_max,
+                   minimalny_wiek, cena, waluta, status_gra, status_kolekcja,
+                   wydawca, rok_wydania, notatki
+            FROM planszowe ORDER BY nazwa COLLATE NOCASE
+            """,
+        )
+        result: list[dict[str, Any]] = []
+        for row in rows:
+            item = dict(row)
+            minimum = int(item.get("min_graczy") or 1)
+            maximum = int(item.get("max_graczy") or minimum)
+            item["liczba_graczy_tekst"] = str(minimum) if minimum == maximum else f"{minimum}-{maximum}"
+            time_min = item.get("czas_min")
+            time_max = item.get("czas_max")
+            if time_min is None and time_max is None:
+                item["czas_tekst"] = ""
+            elif time_max is None or int(time_max) == int(time_min or 0):
+                item["czas_tekst"] = f"{int(time_min or time_max)} min"
+            elif time_min is None:
+                item["czas_tekst"] = f"do {int(time_max)} min"
+            else:
+                item["czas_tekst"] = f"{int(time_min)}-{int(time_max)} min"
+            if item.get("cena") is None:
+                item["cena_tekst"] = ""
+            else:
+                item["cena_tekst"] = f"{float(item['cena']):g} {item.get('waluta') or 'PLN'}"
+            result.append(item)
+        return result
+
+    @staticmethod
+    def _optional_nonnegative_int(value: Any, label: str) -> int | None:
+        if value in (None, ""):
+            return None
+        try:
+            parsed = int(str(value).strip())
+        except ValueError as exc:
+            raise ValueError(f"{label} musi być liczbą całkowitą.") from exc
+        if parsed < 0:
+            raise ValueError(f"{label} nie może być ujemne.")
+        return parsed
+
+    def save_board_game(self, values: dict[str, Any], record_id: int | None = None) -> int:
+        name = str(values.get("nazwa", "")).strip()
+        if not name:
+            raise ValueError("Nazwa gry jest wymagana.")
+        game_type = str(values.get("typ") or "Gra planszowa").strip()
+        if game_type not in {"Gra planszowa", "Gra karciana"}:
+            raise ValueError("Typ musi wskazywać grę planszową albo karcianą.")
+
+        minimum_players = self._optional_nonnegative_int(values.get("min_graczy"), "Minimalna liczba graczy")
+        maximum_players = self._optional_nonnegative_int(values.get("max_graczy"), "Maksymalna liczba graczy")
+        minimum_players = minimum_players or 1
+        maximum_players = maximum_players or minimum_players
+        if minimum_players < 1 or maximum_players < 1:
+            raise ValueError("Gra musi obsługiwać co najmniej jednego gracza.")
+        if minimum_players > maximum_players:
+            raise ValueError("Minimalna liczba graczy nie może przekraczać maksymalnej.")
+
+        time_min = self._optional_nonnegative_int(values.get("czas_min"), "Minimalny czas rozgrywki")
+        time_max = self._optional_nonnegative_int(values.get("czas_max"), "Maksymalny czas rozgrywki")
+        if time_min is not None and time_max is not None and time_min > time_max:
+            raise ValueError("Minimalny czas rozgrywki nie może przekraczać maksymalnego.")
+        age = self._optional_nonnegative_int(values.get("minimalny_wiek"), "Minimalny wiek")
+        year = self._optional_nonnegative_int(values.get("rok_wydania"), "Rok wydania")
+        if year is not None and not 1000 <= year <= 9999:
+            raise ValueError("Rok wydania musi mieć cztery cyfry.")
+
+        price_value = values.get("cena")
+        price: float | None
+        if price_value in (None, ""):
+            price = None
+        else:
+            try:
+                price = float(str(price_value).replace(",", "."))
+            except ValueError as exc:
+                raise ValueError("Cena musi być liczbą.") from exc
+            if price < 0:
+                raise ValueError("Cena nie może być ujemna.")
+
+        fields = (
+            "nazwa", "typ", "min_graczy", "max_graczy", "czas_min", "czas_max",
+            "minimalny_wiek", "cena", "waluta", "status_gra", "status_kolekcja",
+            "wydawca", "rok_wydania", "notatki",
+        )
+        normalized = {
+            "nazwa": name,
+            "typ": game_type,
+            "min_graczy": minimum_players,
+            "max_graczy": maximum_players,
+            "czas_min": time_min,
+            "czas_max": time_max,
+            "minimalny_wiek": age,
+            "cena": price,
+            "waluta": _clean(values.get("waluta")) or "PLN",
+            "status_gra": _clean(values.get("status_gra")) or "Nie grane",
+            "status_kolekcja": _clean(values.get("status_kolekcja")) or "W kolekcji",
+            "wydawca": _clean(values.get("wydawca")),
+            "rok_wydania": year,
+            "notatki": _clean(values.get("notatki")),
+        }
+        payload = [normalized[field] for field in fields]
+        with self.db.connect("planszowe.db", write=True) as connection:
+            if record_id is None:
+                record_id = self.db.next_id("planszowe.db", "planszowe")
+                placeholders = ", ".join("?" for _ in fields)
+                connection.execute(
+                    f"INSERT INTO planszowe (id, {', '.join(fields)}) VALUES (?, {placeholders})",
+                    (record_id, *payload),
+                )
+            else:
+                assignments = ", ".join(f"{field}=?" for field in fields)
+                connection.execute(
+                    f"UPDATE planszowe SET {assignments} WHERE id=?",
+                    (*payload, record_id),
+                )
+        return int(record_id)
+
+    def delete_board_game(self, record_id: int) -> None:
+        with self.db.connect("planszowe.db", write=True) as connection:
+            connection.execute("DELETE FROM planszowe WHERE id=?", (record_id,))
+
+    @staticmethod
+    def _calendar_description(session: dict[str, Any]) -> str:
+        details = [
+            f"System: {session.get('system_nazwa') or ''}",
+            f"Mistrz gry: {session.get('mg_nazwa') or 'Brak, sesja GM-less'}",
+            f"Gracze: {session.get('gracze_nazwy') or ''}",
+            f"Tryb: {session.get('tryb_gry') or ''}",
+        ]
+        if session.get("tytul_kampanii"):
+            details.append(f"Kampania: {session['tytul_kampanii']}")
+        if session.get("tytul_przygody"):
+            details.append(f"Przygoda: {session['tytul_przygody']}")
+        if session.get("notatka"):
+            details.extend(("", str(session["notatka"])))
+        return "\n".join(details)
+
+    @staticmethod
+    def _ics_escape(value: str) -> str:
+        return (
+            value.replace("\\", "\\\\")
+            .replace(";", "\\;")
+            .replace(",", "\\,")
+            .replace("\r\n", "\\n")
+            .replace("\n", "\\n")
+            .replace("\r", "\\n")
+        )
+
+    def export_sessions_ics(self, destination: Path) -> Path:
+        destination = Path(destination)
+        if destination.suffix.lower() != ".ics":
+            destination = destination.with_suffix(".ics")
+        lines = [
+            "BEGIN:VCALENDAR",
+            "VERSION:2.0",
+            "PRODID:-//Lioheart//Sesyjka GTK4//PL",
+            "CALSCALE:GREGORIAN",
+            "METHOD:PUBLISH",
+            "X-WR-CALNAME:Sesje RPG",
+        ]
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        for session in self.sessions():
+            event_date = datetime.strptime(str(session["data_sesji"]), "%Y-%m-%d").date()
+            summary = f"Sesja RPG: {session.get('system_nazwa') or 'Bez systemu'}"
+            lines.extend(
+                [
+                    "BEGIN:VEVENT",
+                    f"UID:sesyjka-session-{int(session['id'])}@github.com/Lioheart/Sesyjka",
+                    f"DTSTAMP:{timestamp}",
+                    f"DTSTART;VALUE=DATE:{event_date.strftime('%Y%m%d')}",
+                    f"DTEND;VALUE=DATE:{(event_date + timedelta(days=1)).strftime('%Y%m%d')}",
+                    f"SUMMARY:{self._ics_escape(summary)}",
+                    f"DESCRIPTION:{self._ics_escape(self._calendar_description(session))}",
+                    "TRANSP:TRANSPARENT",
+                    "END:VEVENT",
+                ]
+            )
+        lines.append("END:VCALENDAR")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text("\r\n".join(lines) + "\r\n", encoding="utf-8")
+        return destination
+
+    def export_sessions_csv(self, destination: Path) -> Path:
+        destination = Path(destination)
+        if destination.suffix.lower() != ".csv":
+            destination = destination.with_suffix(".csv")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        with destination.open("w", encoding="utf-8-sig", newline="") as stream:
+            writer = csv.DictWriter(
+                stream,
+                fieldnames=(
+                    "Subject", "Start Date", "Start Time", "End Date", "End Time",
+                    "All Day Event", "Description", "Location", "Private",
+                ),
+            )
+            writer.writeheader()
+            for session in self.sessions():
+                event_date = datetime.strptime(str(session["data_sesji"]), "%Y-%m-%d").date()
+                writer.writerow(
+                    {
+                        "Subject": f"Sesja RPG: {session.get('system_nazwa') or 'Bez systemu'}",
+                        "Start Date": event_date.strftime("%m/%d/%Y"),
+                        "Start Time": "",
+                        "End Date": event_date.strftime("%m/%d/%Y"),
+                        "End Time": "",
+                        "All Day Event": "True",
+                        "Description": self._calendar_description(session),
+                        "Location": str(session.get("tryb_gry") or ""),
+                        "Private": "False",
+                    }
+                )
+        return destination
+
     def statistics(self) -> dict[str, Any]:
         systems = self.systems()
         sessions = self.sessions()
         players = self.players()
         publishers = self.publishers()
+        board_games = self.board_games()
 
         sessions_by_system = Counter(
             str(item.get("system_nazwa") or "Bez systemu") for item in sessions
@@ -535,6 +783,45 @@ class Repository:
             if year:
                 sessions_by_year[year] += 1
 
+        def sorted_counter(counter: Counter[str]) -> list[tuple[str, int]]:
+            return sorted(
+                counter.items(),
+                key=lambda item: (-item[1], item[0].casefold()),
+            )
+
+        board_game_types = Counter(
+            "Karcianki" if str(item.get("typ") or "").casefold() == "gra karciana" else "Planszówki"
+            for item in board_games
+        )
+
+        value_by_currency: dict[str, Decimal] = {}
+
+        def add_value(value: Any, currency: Any) -> None:
+            if value in (None, ""):
+                return
+            try:
+                parsed = Decimal(str(value).strip().replace(",", "."))
+            except (InvalidOperation, ValueError):
+                return
+            if parsed <= 0:
+                return
+            code = str(currency or "PLN").strip().upper() or "PLN"
+            value_by_currency[code] = value_by_currency.get(code, Decimal("0")) + parsed
+
+        for item in systems:
+            add_value(item.get("cena_zakupu"), item.get("waluta_zakupu"))
+        for item in board_games:
+            add_value(item.get("cena"), item.get("waluta"))
+
+        def format_currency(value: Decimal, currency: str) -> str:
+            amount = f"{value:,.2f}".replace(",", " ").replace(".", ",")
+            return f"{amount} {currency}"
+
+        collection_value = " · ".join(
+            format_currency(value, currency)
+            for currency, value in sorted(value_by_currency.items())
+        ) or "0,00 PLN"
+
         counts = {
             "Pozycje RPG": len(systems),
             "Sesje": len(sessions),
@@ -542,13 +829,9 @@ class Repository:
             "Wydawcy": len(publishers),
             "Fizyczne": len(physical),
             "PDF": len(pdf),
+            "Planszówki/Karcianki": len(board_games),
+            "Wartość pozycji": collection_value,
         }
-
-        def sorted_counter(counter: Counter[str]) -> list[tuple[str, int]]:
-            return sorted(
-                counter.items(),
-                key=lambda item: (-item[1], item[0].casefold()),
-            )
 
         charts = {
             "Pozycje RPG": {
@@ -578,6 +861,10 @@ class Repository:
             "PDF": {
                 "title": "Pozycje PDF według systemu",
                 "items": sorted_counter(pdf_by_system),
+            },
+            "Planszówki/Karcianki": {
+                "title": "Gry planszowe i karciane",
+                "items": [("Planszówki", board_game_types.get("Planszówki", 0)), ("Karcianki", board_game_types.get("Karcianki", 0))],
             },
         }
         return {

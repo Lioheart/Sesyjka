@@ -1,7 +1,7 @@
 Name:           sesyjka
 Version:        @VERSION@
 Release:        1%{?dist}
-Summary:        GTK4 application for tabletop RPG collections and sessions
+Summary:        GTK4 application for RPG, board-game and card-game collections
 License:        CC-BY-4.0
 URL:            https://github.com/Lioheart/Sesyjka
 Source0:        %{name}-%{version}.tar.gz
@@ -16,7 +16,7 @@ Recommends:     polkit
 
 %description
 Sesyjka manages tabletop RPG systems, books, supplements, sessions,
-players, publishers, statistics and compatible SQLite databases.
+players, publishers, board games, card games, statistics and compatible SQLite databases.
 
 %prep
 %autosetup

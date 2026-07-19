@@ -75,9 +75,30 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(session["system_id"], game_system_id)
         self.assertEqual(session["system_nazwa"], "System Testowy")
         self.assertEqual(session["gracze_nazwy"], "Gracz")
+        board_id = self.repository.save_board_game(
+            {
+                "nazwa": "Planszówka testowa",
+                "typ": "Gra planszowa",
+                "min_graczy": 2,
+                "max_graczy": 4,
+                "czas_min": 45,
+                "czas_max": 90,
+                "minimalny_wiek": 12,
+                "cena": "149,90",
+                "status_gra": "Grane",
+                "status_kolekcja": "W kolekcji",
+            }
+        )
+        self.assertEqual(self.repository.board_games()[0]["id"], board_id)
         stats = self.repository.statistics()
         self.assertEqual(stats["counts"]["Sesje"], 1)
         self.assertEqual(stats["counts"]["Pozycje RPG"], 1)
+        self.assertEqual(stats["counts"]["Planszówki/Karcianki"], 1)
+        self.assertEqual(stats["counts"]["Wartość pozycji"], "299,70 PLN")
+        self.assertEqual(
+            stats["charts"]["Planszówki/Karcianki"]["items"],
+            [("Planszówki", 1), ("Karcianki", 0)],
+        )
         self.assertEqual(stats["charts"]["Sesje"]["items"], [("2026", 1)])
         self.assertEqual(stats["charts"]["Pozycje RPG"]["items"], [("System Testowy", 1)])
         self.assertEqual(stats["charts"]["Wydawcy"]["items"], [("Test Publisher", 1)])
@@ -92,7 +113,7 @@ class RepositoryTests(unittest.TestCase):
         with zipfile.ZipFile(result) as archive:
             self.assertEqual(
                 set(archive.namelist()),
-                {"systemy_rpg.db", "sesje_rpg.db", "gracze.db", "wydawcy.db"},
+                {"systemy_rpg.db", "sesje_rpg.db", "gracze.db", "wydawcy.db", "planszowe.db"},
             )
 
     def test_guest_mode_blocks_writes(self) -> None:
@@ -168,7 +189,7 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(result, destination)
         self.assertEqual(
             {path.name for path in destination.iterdir()},
-            {"systemy_rpg.db", "sesje_rpg.db", "gracze.db", "wydawcy.db"},
+            {"systemy_rpg.db", "sesje_rpg.db", "gracze.db", "wydawcy.db", "planszowe.db"},
         )
 
     def test_import_validation_rejects_database_with_wrong_schema(self) -> None:
@@ -238,6 +259,7 @@ class RepositoryTests(unittest.TestCase):
                 "system_gry_id": system_id,
                 "cena_zakupu": "120,50",
                 "waluta_zakupu": "PLN",
+                "status_kolekcja": "Sprzedane",
                 "cena_sprzedazy": "90.00",
                 "waluta_sprzedazy": "PLN",
                 "rok_wydania": "2024",
@@ -249,6 +271,104 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(record["cena_sprzedazy"], 90.0)
         self.assertEqual(record["rok_wydania"], 2024)
         self.assertEqual(record["isbn"], "978-0-00-000000-0")
+
+    def test_board_game_crud_and_validation(self) -> None:
+        record_id = self.repository.save_board_game(
+            {
+                "nazwa": "Karty testowe",
+                "typ": "Gra karciana",
+                "min_graczy": "2",
+                "max_graczy": "6",
+                "czas_min": "20",
+                "czas_max": "40",
+                "minimalny_wiek": "8",
+                "cena": "59,99",
+                "waluta": "PLN",
+                "status_gra": "Nie grane",
+                "status_kolekcja": "W kolekcji",
+            }
+        )
+        record = self.repository.board_games()[0]
+        self.assertEqual(record["id"], record_id)
+        self.assertEqual(record["liczba_graczy_tekst"], "2-6")
+        self.assertEqual(record["czas_tekst"], "20-40 min")
+        self.assertEqual(record["cena_tekst"], "59.99 PLN")
+        with self.assertRaisesRegex(ValueError, "Minimalna liczba graczy"):
+            self.repository.save_board_game(
+                {"nazwa": "Błędna", "min_graczy": 5, "max_graczy": 2}
+            )
+        self.repository.delete_board_game(record_id)
+        self.assertEqual(self.repository.board_games(), [])
+
+    def test_calendar_exports_include_session_details(self) -> None:
+        player_id = self.repository.save_player({"nick": "Kalendarzowy"})
+        system_id = self.repository.save_game_system({"nazwa": "System kalendarza"})
+        self.repository.save_session(
+            {
+                "data_sesji": "2026-07-20",
+                "system_id": system_id,
+                "player_ids": [player_id],
+                "tryb_gry": "Online",
+                "tytul_przygody": "Test ICS",
+                "notatka": "Opis wydarzenia",
+            }
+        )
+        ics = self.repository.export_sessions_ics(self.root / "sesje.ics")
+        csv_path = self.repository.export_sessions_csv(self.root / "sesje.csv")
+        ics_text = ics.read_text(encoding="utf-8")
+        csv_text = csv_path.read_text(encoding="utf-8-sig")
+        self.assertIn("BEGIN:VCALENDAR", ics_text)
+        self.assertIn("DTSTART;VALUE=DATE:20260720", ics_text)
+        self.assertIn("Sesja RPG: System kalendarza", ics_text)
+        self.assertIn("Subject,Start Date", csv_text)
+        self.assertIn("Sesja RPG: System kalendarza", csv_text)
+        self.assertIn("07/20/2026", csv_text)
+
+    def test_rpg_component_prices_are_summed_and_irrelevant_prices_cleared(self) -> None:
+        game_system_id = self.repository.save_game_system({"nazwa": "System cen"})
+        record_id = self.repository.save_system(
+            {
+                "nazwa": "Pakiet",
+                "typ": "Podręcznik Główny",
+                "system_gry_id": game_system_id,
+                "fizyczny": True,
+                "pdf": False,
+                "vtt": "Foundry VTT",
+                "cena_fiz": "100",
+                "cena_pdf": "50",
+                "cena_vtt": "25",
+                "cena_zakupu": "999",
+                "status_kolekcja": "W kolekcji",
+                "cena_sprzedazy": "20",
+            }
+        )
+        record = next(item for item in self.repository.systems() if item["id"] == record_id)
+        self.assertEqual(record["cena_fiz"], 100.0)
+        self.assertIsNone(record["cena_pdf"])
+        self.assertEqual(record["cena_vtt"], 25.0)
+        self.assertEqual(record["cena_zakupu"], 125.0)
+        self.assertIsNone(record["cena_sprzedazy"])
+
+    def test_guest_mode_accepts_original_four_database_set(self) -> None:
+        guest = self.root / "legacy-guest"
+        guest.mkdir()
+        for filename in ("systemy_rpg.db", "sesje_rpg.db", "gracze.db", "wydawcy.db"):
+            (guest / filename).write_bytes((self.root / filename).read_bytes())
+        self.databases.enter_guest_mode(guest)
+        self.assertEqual(self.repository.board_games(), [])
+
+    def test_board_games_schema_is_kept_in_separate_database(self) -> None:
+        for filename in ("systemy_rpg.db", "sesje_rpg.db", "gracze.db", "wydawcy.db"):
+            with sqlite3.connect(self.root / filename) as connection:
+                table = connection.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='planszowe'"
+                ).fetchone()
+            self.assertIsNone(table, filename)
+        with sqlite3.connect(self.root / "planszowe.db") as connection:
+            table = connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='planszowe'"
+            ).fetchone()
+        self.assertIsNotNone(table)
 
     def test_schema_update_creates_backup_before_migration(self) -> None:
         legacy_root = self.root / "legacy"

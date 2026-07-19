@@ -15,7 +15,7 @@ from . import APP_ID, APP_NAME, APP_VERSION, UPDATE_REPOSITORY
 from .config import load_settings, migrate_legacy_databases, save_settings
 from .database_manager import DatabaseManager
 from .dialogs import ModalWindow, info
-from .pages import PlayersPage, PublishersPage, SessionsPage, StatisticsPage, SystemsPage
+from .pages import BoardGamesPage, PlayersPage, PublishersPage, SessionsPage, StatisticsPage, SystemsPage
 from .repository import Repository
 from .transfer import TransferWindow
 from .updater import (
@@ -112,6 +112,34 @@ BASE_CSS = """
 .error {
   color: #c01c28;
 }
+
+.status-collection-owned {
+  background-color: alpha(@success_color, 0.18);
+}
+.status-collection-for-sale {
+  background-color: alpha(@warning_color, 0.22);
+}
+.status-collection-sold {
+  background-color: alpha(@error_color, 0.12);
+}
+.status-collection-not-owned {
+  background-color: alpha(@window_fg_color, 0.06);
+}
+.status-collection-wishlist {
+  background-color: alpha(@accent_color, 0.16);
+}
+.status-collection-loaned {
+  background-color: rgba(145, 65, 172, 0.16);
+}
+.status-collection-mixed {
+  background-color: alpha(@accent_color, 0.09);
+}
+.statistics-table-separator {
+  min-width: 1px;
+  margin-left: 6px;
+  margin-right: 6px;
+  background-color: alpha(@window_fg_color, 0.22);
+}
 """
 
 
@@ -142,7 +170,7 @@ class SesyjkaWindow(Adw.ApplicationWindow):
             title.add_css_class("title")
         self.header.set_title_widget(title)
 
-        transfer_button = Gtk.Button.new_from_icon_name("document-save-symbolic")
+        transfer_button = Gtk.Button.new_from_icon_name("drive-harddisk-symbolic")
         transfer_button.set_tooltip_text("Bazy danych")
         transfer_button.connect("clicked", lambda _button: self.show_transfer())
         self.header.pack_start(transfer_button)
@@ -231,12 +259,14 @@ class SesyjkaWindow(Adw.ApplicationWindow):
             "sessions": SessionsPage(self, self.repository),
             "players": PlayersPage(self, self.repository),
             "publishers": PublishersPage(self, self.repository),
+            "board_games": BoardGamesPage(self, self.repository),
             "statistics": StatisticsPage(self, self.repository),
         }
         self.stack.add_titled(self.pages["systems"], "systems", "Systemy RPG")
         self.stack.add_titled(self.pages["sessions"], "sessions", "Sesje RPG")
         self.stack.add_titled(self.pages["players"], "players", "Gracze")
         self.stack.add_titled(self.pages["publishers"], "publishers", "Wydawcy")
+        self.stack.add_titled(self.pages["board_games"], "board_games", "Gry planszowe")
         self.stack.add_titled(self.pages["statistics"], "statistics", "Statystyki")
         self.stack.connect("notify::visible-child-name", lambda *_args: self.refresh_visible_page())
         for page in self.pages.values():
@@ -302,7 +332,7 @@ class SesyjkaWindow(Adw.ApplicationWindow):
     def refresh_dependent_pages(self) -> None:
         self.pages["statistics"].refresh()
         visible = self.stack.get_visible_child()
-        for key in ("systems", "sessions", "players", "publishers"):
+        for key in ("systems", "sessions", "players", "publishers", "board_games"):
             page = self.pages[key]
             if page is not visible:
                 page.refresh()
@@ -500,6 +530,7 @@ class SesyjkaWindow(Adw.ApplicationWindow):
         dialog = TransferWindow(
             self,
             self.databases,
+            self.repository,
             on_database_change=self.refresh_all,
             on_guest_change=self.update_guest_state,
         )
@@ -519,12 +550,15 @@ class SesyjkaWindow(Adw.ApplicationWindow):
             "GRACZE I WYDAWCY\n"
             "Zakładki umożliwiają pełne dodawanie, edycję, usuwanie, sortowanie i filtrowanie. "
             "Usunięcie rekordu powiązanego z innymi danymi jest blokowane, aby nie tworzyć osieroconych odwołań.\n\n"
+            "GRY PLANSZOWE\n"
+            "Osobna baza planszowe.db przechowuje gry planszowe i karciane, zakres liczby graczy, czas rozgrywki, "
+            "minimalny wiek, cenę, status gry i status kolekcji.\n\n"
             "STATYSTYKI\n"
             "Karty liczbowe przełączają wykresy ilości. Zestawienia odświeżają się po operacjach CRUD "
             "oraz po użyciu przycisku odświeżania.\n\n"
             "BAZY DANYCH\n"
-            "Przycisk dyskietki otwiera eksport ZIP, eksport do folderu, eksport XLSX, import ZIP lub folderu "
-            "oraz tryb gościa tylko do odczytu. Import tworzy kopię zapasową własnych baz.\n\n"
+            "Przycisk baz danych otwiera eksport ZIP, eksport do folderu, eksport XLSX, eksport sesji do ICS i CSV, "
+            "import ZIP lub folderu oraz tryb gościa tylko do odczytu. Import tworzy kopię zapasową własnych baz.\n\n"
             "SKRÓTY\n"
             "Ctrl+N dodaje rekord w aktywnej zakładce. Ctrl+R odświeża dane. Ctrl+Q zamyka program. "
             "Dwuklik edytuje rekord, a prawy przycisk myszy otwiera menu kontekstowe.\n\n"
@@ -547,6 +581,12 @@ class SesyjkaWindow(Adw.ApplicationWindow):
     def show_history(self) -> None:
         dialog = ModalWindow(self, "Historia zmian", width=720, height=620)
         history_text = (
+            "0.8.1\n"
+            "Kolory pozycji RPG zależą od statusu kolekcji. Poprawiono ikonę baz danych i przycisk potwierdzenia importu, "
+            "dodano sumę wartości pozycji oraz odstęp z separatorem pomiędzy tabelami statystyk.\n\n"
+            "0.8.0\n"
+            "Dodano osobną bazę i zakładkę gier planszowych oraz karcianych, eksport sesji do kalendarzy ICS i CSV, "
+            "kolorowanie pozycji RPG oraz dynamiczne pola cen w formularzu pozycji RPG.\n\n"
             "0.7.0\n"
             "Dodano automatyczne budowanie pakietów DEB, RPM i instalatora ogólnego przy publikowaniu wydania GitHub. "
             "Aplikacja wykrywa nowe stabilne wydania, weryfikuje sumy SHA-256 i aktualizuje właściwy kanał instalacji przez Polkit. "
@@ -577,7 +617,8 @@ class SesyjkaWindow(Adw.ApplicationWindow):
         description = Gtk.Label(
             label=(
                 "Natywna aplikacja GTK4 i Libadwaita dla Linuksa do zarządzania kolekcją systemów RPG, "
-                "sesjami, graczami i wydawcami. Dane pozostają w zgodnych plikach SQLite."
+                "sesjami, graczami, wydawcami oraz grami planszowymi i karcianymi. "
+                "Cztery bazy projektu źródłowego pozostają zgodne, a planszowe.db jest niezależnym rozszerzeniem."
             ),
             wrap=True,
             xalign=0.0,

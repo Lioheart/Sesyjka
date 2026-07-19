@@ -3,21 +3,21 @@
 <component type="desktop-application">
   <id>io.github.zuraffpl.Sesyjka</id>
   <name>Sesyjka</name>
-  <summary>Manage tabletop RPG collections and sessions</summary>
-  <summary xml:lang="pl">Zarządzaj kolekcją i sesjami RPG</summary>
+  <summary>Manage tabletop RPG, board game collections and sessions</summary>
+  <summary xml:lang="pl">Zarządzaj kolekcją RPG, planszówkami i sesjami</summary>
   <developer id="io.github.zuraffpl">
     <name>ZuraffPL and Sesyjka contributors</name>
   </developer>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>CC-BY-4.0</project_license>
   <description>
-    <p>Organize tabletop role-playing game systems, books, supplements, sessions, players and publishers in one native GTK application.</p>
+    <p>Organize tabletop role-playing game systems, books, supplements, sessions, players, publishers, board games and card games in one native GTK application.</p>
     <p>Browse hierarchical collections with sorting and per-column filters, record session participants and notes, and inspect quantity charts that update after data changes.</p>
-    <p>Data is stored locally in four compatible SQLite databases. Backups, ZIP and folder transfer, Excel export and a read-only guest mode are included.</p>
+    <p>The four SQLite databases used by the original Sesyjka project remain compatible. Board and card games are stored in a separate fifth database. Backups, ZIP and folder transfer, Excel export, calendar export and a read-only guest mode are included.</p>
     <p>The current user interface is available in Polish.</p>
-    <p xml:lang="pl">Porządkuj systemy gier fabularnych, podręczniki, suplementy, sesje, graczy i wydawców w jednej natywnej aplikacji GTK.</p>
+    <p xml:lang="pl">Porządkuj systemy gier fabularnych, podręczniki, suplementy, sesje, graczy, wydawców oraz gry planszowe i karciane w jednej natywnej aplikacji GTK.</p>
     <p xml:lang="pl">Przeglądaj hierarchiczną kolekcję z sortowaniem i filtrami kolumnowymi, zapisuj uczestników i notatki sesji oraz analizuj automatycznie aktualizowane wykresy ilości.</p>
-    <p xml:lang="pl">Dane są przechowywane lokalnie w czterech zgodnych bazach SQLite. Program obsługuje kopie zapasowe, transfer ZIP i folderów, eksport Excel oraz tryb gościa tylko do odczytu.</p>
+    <p xml:lang="pl">Cztery bazy SQLite projektu źródłowego pozostają zgodne. Gry planszowe i karciane są przechowywane w osobnej piątej bazie. Program obsługuje kopie zapasowe, transfer ZIP i folderów, eksport Excel, eksport kalendarza oraz tryb gościa tylko do odczytu.</p>
   </description>
   <launchable type="desktop-id">io.github.zuraffpl.Sesyjka.desktop</launchable>
   <provides>
@@ -38,47 +38,59 @@
   <url type="vcs-browser">https://github.com/Lioheart/Sesyjka</url>
   <screenshots>
     <screenshot type="default" xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.7.0/screenshots/image.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.1/screenshots/image.png</image>
       <caption>Przeglądaj systemy RPG i hierarchiczną kolekcję podręczników</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.7.0/screenshots/image2.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.1/screenshots/image2.png</image>
       <caption>Edytuj lub usuwaj rekordy z menu kontekstowego</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.7.0/screenshots/image4.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.1/screenshots/image4.png</image>
       <caption>Dodawaj systemy gry i przypisuj wydawców</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.7.0/screenshots/image5.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.1/screenshots/image5.png</image>
       <caption>Twórz wydawcę bez zamykania aktualnego formularza</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.7.0/screenshots/image6.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.1/screenshots/image6.png</image>
       <caption>Zapisuj sesje z systemami, graczami, kampaniami i notatkami</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.7.0/screenshots/image7.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.1/screenshots/image7.png</image>
       <caption>Zarządzaj katalogiem graczy i tagami grup</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.7.0/screenshots/image8.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.1/screenshots/image8.png</image>
       <caption>Zarządzaj danymi wydawców i ich stronami internetowymi</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.7.0/screenshots/image9.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.1/screenshots/image9.png</image>
       <caption>Analizuj statystyki kolekcji i sesji w jasnym motywie</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.7.0/screenshots/image10.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.1/screenshots/image10.png</image>
       <caption>Korzystaj z pełnego interfejsu w ciemnym motywie Adwaita</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.7.0/screenshots/image11.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.1/screenshots/image11.png</image>
       <caption>Eksportuj i importuj bazy oraz przeglądaj je w trybie gościa</caption>
     </screenshot>
   </screenshots>
   <releases>
+    <release version="0.8.1" date="2026-07-19">
+      <description>
+        <p>RPG rows now use collection status colors. Database import actions, the database icon, collection value statistics and spacing between summary tables were corrected.</p>
+        <p xml:lang="pl">Kolory wierszy RPG korzystają teraz ze statusu kolekcji. Poprawiono akcje importu, ikonę baz danych, statystykę wartości kolekcji oraz odstęp między tabelami podsumowania.</p>
+      </description>
+    </release>
+    <release version="0.8.0" date="2026-07-19">
+      <description>
+        <p>Added a separate board and card game database and tab, iCalendar and CSV session export, status-based RPG row colors and dynamic price fields with automatic totals.</p>
+        <p xml:lang="pl">Dodano osobną bazę i zakładkę gier planszowych oraz karcianych, eksport sesji do iCalendar i CSV, kolory wierszy RPG zależne od statusu oraz dynamiczne pola cen z automatyczną sumą.</p>
+      </description>
+    </release>
     <release version="0.7.0" date="2026-07-19">
       <description>
         <p>Added automated GitHub Release builds for Ubuntu DEB, Fedora RPM and a generic Linux installer. The application can detect, verify and install newer stable releases.</p>

@@ -11,6 +11,7 @@ from gi.repository import Gtk
 
 from .database_manager import DatabaseManager
 from .dialogs import ModalWindow, confirm, info
+from .repository import Repository
 
 
 class TransferWindow(ModalWindow):
@@ -18,19 +19,22 @@ class TransferWindow(ModalWindow):
         self,
         parent: Gtk.Window,
         databases: DatabaseManager,
+        repository: Repository,
         on_database_change: Callable[[], None],
         on_guest_change: Callable[[], None],
     ) -> None:
-        super().__init__(parent, "Bazy danych", width=620, height=560)
+        super().__init__(parent, "Bazy danych", width=720, height=720)
         self.databases = databases
+        self.repository = repository
         self.on_database_change = on_database_change
         self.on_guest_change = on_guest_change
         self._choosers: list[Gtk.FileChooserNative] = []
 
         intro = Gtk.Label(
             label=(
-                "Eksport tworzy kopię czterech baz SQLite. Import zastępuje własne bazy po utworzeniu "
-                "kopii zapasowej. Tryb gościa otwiera wskazany zestaw wyłącznie do odczytu."
+                "Eksport tworzy kopię pięciu baz SQLite. Import zastępuje własne bazy po utworzeniu "
+                "kopii zapasowej. Eksport kalendarza zapisuje sesje RPG do ICS albo CSV. "
+                "Tryb gościa otwiera wskazany zestaw wyłącznie do odczytu."
             ),
             wrap=True,
             xalign=0.0,
@@ -41,8 +45,10 @@ class TransferWindow(ModalWindow):
         grid.set_hexpand(True)
         actions = [
             ("Eksport ZIP", "Zapisz komplet baz w archiwum ZIP.", self.choose_export_zip),
-            ("Eksport folderu", "Zapisz cztery pliki SQLite jako osobne pliki.", self.choose_export_folder),
+            ("Eksport folderu", "Zapisz pięć plików SQLite jako osobne pliki.", self.choose_export_folder),
             ("Eksport XLSX", "Zapisz wszystkie tabele w jednym skoroszycie.", self.choose_export_excel),
+            ("Sesje do ICS", "Kalendarz iCalendar dla GNOME Calendar, Google Calendar, Outlook i Apple Calendar.", self.choose_export_ics),
+            ("Sesje do CSV", "Plik CSV zgodny z importem kalendarza Google i arkuszami kalkulacyjnymi.", self.choose_export_calendar_csv),
             ("Import ZIP", "Zastąp własne bazy zawartością archiwum.", self.choose_import_zip),
             ("Import folderu", "Zastąp własne bazy plikami z katalogu.", self.choose_import_folder),
             ("Tryb gościa", "Otwórz bazy z katalogu bez prawa zapisu.", self.choose_guest_folder),
@@ -83,6 +89,8 @@ class TransferWindow(ModalWindow):
         callback: Callable[[Path], None],
         suggested_name: str | None = None,
         zip_filter: bool = False,
+        file_patterns: tuple[str, ...] = (),
+        filter_name: str | None = None,
     ) -> None:
         chooser = Gtk.FileChooserNative.new(
             title,
@@ -93,11 +101,13 @@ class TransferWindow(ModalWindow):
         )
         if suggested_name:
             chooser.set_current_name(suggested_name)
-        if zip_filter:
-            filter_zip = Gtk.FileFilter()
-            filter_zip.set_name("Archiwa ZIP")
-            filter_zip.add_pattern("*.zip")
-            chooser.add_filter(filter_zip)
+        patterns = ("*.zip",) if zip_filter else file_patterns
+        if patterns:
+            file_filter = Gtk.FileFilter()
+            file_filter.set_name(filter_name or "Obsługiwane pliki")
+            for pattern in patterns:
+                file_filter.add_pattern(pattern)
+            chooser.add_filter(file_filter)
         self._choosers.append(chooser)
 
         def response(native: Gtk.FileChooserNative, response_id: int) -> None:
@@ -163,6 +173,42 @@ class TransferWindow(ModalWindow):
         except Exception as exc:
             info(self, "Błąd eksportu", str(exc), error=True)
 
+    def choose_export_ics(self) -> None:
+        self._show_chooser(
+            "Eksport sesji do kalendarza iCalendar",
+            Gtk.FileChooserAction.SAVE,
+            "Eksportuj",
+            self.export_sessions_ics,
+            "sesyjka-sesje.ics",
+            file_patterns=("*.ics",),
+            filter_name="Kalendarz iCalendar",
+        )
+
+    def export_sessions_ics(self, destination: Path) -> None:
+        try:
+            output = self.repository.export_sessions_ics(destination)
+            info(self, "Eksport zakończony", f"Zapisano: {output}")
+        except Exception as exc:
+            info(self, "Błąd eksportu", str(exc), error=True)
+
+    def choose_export_calendar_csv(self) -> None:
+        self._show_chooser(
+            "Eksport sesji do CSV",
+            Gtk.FileChooserAction.SAVE,
+            "Eksportuj",
+            self.export_sessions_csv,
+            "sesyjka-sesje.csv",
+            file_patterns=("*.csv",),
+            filter_name="Plik CSV",
+        )
+
+    def export_sessions_csv(self, destination: Path) -> None:
+        try:
+            output = self.repository.export_sessions_csv(destination)
+            info(self, "Eksport zakończony", f"Zapisano: {output}")
+        except Exception as exc:
+            info(self, "Błąd eksportu", str(exc), error=True)
+
     def choose_import_zip(self) -> None:
         self._show_chooser(
             "Import baz z ZIP",
@@ -186,6 +232,8 @@ class TransferWindow(ModalWindow):
             "Potwierdź import",
             "Import zastąpi odnalezione własne bazy. Przed operacją zostanie utworzona kopia zapasowa.",
             lambda: self.perform_import(source),
+            confirm_label="Zaimportuj",
+            destructive=False,
         )
 
     def perform_import(self, source: Path) -> None:
