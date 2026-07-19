@@ -1,10 +1,17 @@
-# Sesyjka GTK4 0.8.4
+# Sesyjka GTK4 0.8.5
 
 A native Linux application built with Python, GTK4 and Libadwaita. It manages tabletop RPG systems, books, supplements, sessions, players, publishers, board games and card games. The four original SQLite databases remain compatible, while board and card games use a separate fifth database.
 
 Result repository: https://github.com/Lioheart/Sesyjka
 
 Original project and attribution: https://github.com/ZuraffPL/sesyjka
+
+## Changes in 0.8.5
+
+- removed unsupported traversal and mutation of private `Gtk.ColumnView` row widgets that could trigger GTK accessibility assertions and segmentation faults
+- temporarily removed collection-status row coloring until the table is migrated to a public whole-row widget API
+- selection styling now uses only the supported `row:selected` CSS state
+- light and dark appearance remains controlled through `Adw.StyleManager`
 
 ## Changes in 0.8.4
 

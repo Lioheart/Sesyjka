@@ -73,10 +73,8 @@ BASE_CSS = """
 .data-table > listview > row > cell {
   background: transparent;
 }
-.data-table > listview > row:nth-child(even) {
-  background-color: shade(@view_bg_color, 0.96);
-}
 .data-table > listview > row:selected {
+  background-color: alpha(@accent_color, 0.16);
   box-shadow: inset 0 0 0 2px @accent_color;
 }
 .stat-card {
@@ -134,36 +132,6 @@ BASE_CSS = """
   color: #c01c28;
 }
 
-.data-table > listview > row.status-collection-owned {
-  background-color: alpha(@success_color, 0.18);
-}
-.data-table > listview > row.status-collection-for-sale {
-  background-color: alpha(@warning_color, 0.20);
-}
-.data-table > listview > row.status-collection-sold {
-  background-color: alpha(@error_color, 0.12);
-}
-.data-table > listview > row.status-collection-not-owned {
-  background-color: @view_bg_color;
-}
-.data-table > listview > row.status-collection-wishlist {
-  background-color: alpha(@accent_color, 0.14);
-}
-.data-table > listview > row.status-collection-loaned {
-  background-color: rgba(145, 65, 172, 0.14);
-}
-.data-table > listview > row.status-collection-mixed {
-  background-color: alpha(@accent_color, 0.08);
-}
-.data-table > listview > row.status-collection-owned:nth-child(even),
-.data-table > listview > row.status-collection-for-sale:nth-child(even),
-.data-table > listview > row.status-collection-sold:nth-child(even),
-.data-table > listview > row.status-collection-not-owned:nth-child(even),
-.data-table > listview > row.status-collection-wishlist:nth-child(even),
-.data-table > listview > row.status-collection-loaned:nth-child(even),
-.data-table > listview > row.status-collection-mixed:nth-child(even) {
-  background-image: linear-gradient(rgba(0, 0, 0, 0.055), rgba(0, 0, 0, 0.055));
-}
 .supplement-type-list {
   padding: 10px 12px;
   border: 1px solid alpha(@window_fg_color, 0.14);
@@ -617,6 +585,9 @@ class SesyjkaWindow(Adw.ApplicationWindow):
     def show_history(self) -> None:
         dialog = ModalWindow(self, "Historia zmian", width=720, height=620)
         history_text = (
+            "0.8.5\n"
+            "Usunięto nieobsługiwane stylowanie prywatnych widgetów wierszy Gtk.ColumnView, które na części wersji GTK powodowało błędy dostępności i SIGSEGV. "
+            "Tabele korzystają teraz wyłącznie z publicznych mechanizmów GTK i bezpiecznego stylu zaznaczenia.\n\n"
             "0.8.4\n"
             "Uproszczono formularz systemu gry, powiązano planszówki i karcianki z bazą wydawców, "
             "usunięto notatki z ich formularza oraz dodano klikalne strony WWW wydawców.\n\n"

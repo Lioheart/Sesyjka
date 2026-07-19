@@ -6,17 +6,7 @@ from typing import Any
 import gi
 
 gi.require_version("Gtk", "4.0")
-from gi.repository import Gdk, Gio, GLib, GObject, Gtk, Pango
-
-ROW_STYLE_CLASSES = (
-    "status-collection-owned",
-    "status-collection-for-sale",
-    "status-collection-sold",
-    "status-collection-not-owned",
-    "status-collection-wishlist",
-    "status-collection-loaned",
-    "status-collection-mixed",
-)
+from gi.repository import Gdk, Gio, GObject, Gtk, Pango
 
 class TableRow(GObject.Object):
     def __init__(self, record: dict[str, Any], values: Sequence[str]) -> None:
@@ -304,34 +294,6 @@ class DataTable(Gtk.Box):
             else:
                 content.remove_css_class("heading")
 
-        # Gtk.ColumnView tworzy jeden wewnętrzny widget CSS ``row`` dla
-        # całego rekordu. Kolor jest przypisywany właśnie temu widgetowi,
-        # a nie kontenerom poszczególnych komórek. Dzięki temu tło jest
-        # ciągłe na pełnej szerokości wiersza, również pod separatorami.
-        if not self._style_row_from_cell(cell, row.record):
-            GLib.idle_add(self._style_row_after_bind, item, row)
-
-    def _style_row_after_bind(self, item: Gtk.ListItem, expected_row: TableRow) -> bool:
-        if item.get_item() is not expected_row:
-            return GLib.SOURCE_REMOVE
-        child = item.get_child()
-        if isinstance(child, Gtk.Widget):
-            self._style_row_from_cell(child, expected_row.record)
-        return GLib.SOURCE_REMOVE
-
-    @staticmethod
-    def _style_row_from_cell(cell: Gtk.Widget, record: dict[str, Any]) -> bool:
-        widget: Gtk.Widget | None = cell
-        while widget is not None:
-            if widget.get_css_name() == "row":
-                for css_class in ROW_STYLE_CLASSES:
-                    widget.remove_css_class(css_class)
-                row_css_class = str(record.get("_row_css_class") or "")
-                if row_css_class in ROW_STYLE_CLASSES:
-                    widget.add_css_class(row_css_class)
-                return True
-            widget = widget.get_parent()
-        return False
 
     @staticmethod
     def _compare_rows(left: TableRow, right: TableRow, key: str) -> Gtk.Ordering:

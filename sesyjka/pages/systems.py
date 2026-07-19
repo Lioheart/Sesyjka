@@ -71,30 +71,6 @@ class SystemsPage(CrudPage):
             ],
         ]
 
-    @staticmethod
-    def _collection_status_css(status: Any) -> str:
-        normalized = str(status or "W kolekcji").strip().casefold()
-        return {
-            "w kolekcji": "status-collection-owned",
-            "na sprzedaż": "status-collection-for-sale",
-            "sprzedane": "status-collection-sold",
-            "nieposiadane": "status-collection-not-owned",
-            "do kupienia": "status-collection-wishlist",
-            "pożyczone": "status-collection-loaned",
-        }.get(normalized, "status-collection-not-owned")
-
-    @classmethod
-    def _group_collection_status_css(cls, records: list[dict[str, Any]]) -> str:
-        statuses = {
-            str(item.get("status_kolekcja") or "W kolekcji").strip().casefold()
-            for item in records
-        }
-        if not statuses:
-            return "status-collection-not-owned"
-        if len(statuses) == 1:
-            return cls._collection_status_css(next(iter(statuses)))
-        return "status-collection-mixed"
-
     def load_records(self) -> list[dict[str, Any]]:
         positions = self.repository.systems()
         positions_by_game: dict[int, list[dict[str, Any]]] = defaultdict(list)
@@ -106,7 +82,6 @@ class SystemsPage(CrudPage):
             child["pdf_tekst"] = "Tak" if record.get("pdf") else ""
             child["_context_enabled"] = True
             child["_is_entity"] = True
-            child["_row_css_class"] = self._collection_status_css(record.get("status_kolekcja"))
             game_id = record.get("system_gry_id")
             if game_id is None:
                 orphaned.append(child)
@@ -180,7 +155,6 @@ class SystemsPage(CrudPage):
                     "_depth": 0,
                     "_group_id": f"system:{game_id}",
                     "_context_enabled": True,
-                    "_row_css_class": self._group_collection_status_css(game_records),
                     "_children": children,
                 }
             )
@@ -198,7 +172,6 @@ class SystemsPage(CrudPage):
                     "_depth": 0,
                     "_group_id": f"missing:{missing_game_id}",
                     "_context_enabled": False,
-                    "_row_css_class": self._group_collection_status_css(records),
                     "_children": children,
                 }
             )
@@ -215,7 +188,6 @@ class SystemsPage(CrudPage):
                     "_depth": 0,
                     "_group_id": "orphans",
                     "_context_enabled": False,
-                    "_row_css_class": self._group_collection_status_css(orphaned),
                     "_children": build_book_tree(orphaned),
                 }
             )

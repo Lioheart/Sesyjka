@@ -231,24 +231,23 @@ class ApplicationSourceTests(unittest.TestCase):
             self.assertIn(token, systems)
         self.assertIn("set_row_visible", widgets)
 
-    def test_rpg_rows_are_colored_by_collection_status(self) -> None:
-        systems = (self.root / "sesyjka" / "pages" / "systems.py").read_text(encoding="utf-8")
+    def test_column_view_does_not_mutate_private_row_widgets(self) -> None:
         widgets = (self.root / "sesyjka" / "widgets.py").read_text(encoding="utf-8")
         app = (self.root / "sesyjka" / "app.py").read_text(encoding="utf-8")
-        self.assertIn('record.get("status_kolekcja")', systems)
-        self.assertNotIn('self._status_css(record.get("status_gra"))', systems)
-        for css_class in (
-            "status-collection-owned",
-            "status-collection-for-sale",
-            "status-collection-sold",
-            "status-collection-not-owned",
-            "status-collection-wishlist",
-            "status-collection-loaned",
-            "status-collection-mixed",
-        ):
-            self.assertIn(css_class, systems)
-            self.assertIn(css_class, widgets)
-            self.assertIn(f".{css_class}", app)
+        systems = (self.root / "sesyjka" / "pages" / "systems.py").read_text(encoding="utf-8")
+        self.assertNotIn('get_css_name() == "row"', widgets)
+        self.assertNotIn("_style_row_from_cell", widgets)
+        self.assertNotIn("_style_row_after_bind", widgets)
+        self.assertNotIn("ROW_STYLE_CLASSES", widgets)
+        self.assertNotIn('record["_row_css_class"]', systems)
+        self.assertNotIn("row.status-collection-", app)
+        self.assertIn("row:selected", app)
+
+    def test_theme_uses_adwaita_style_manager_only(self) -> None:
+        source = (self.root / "sesyjka" / "app.py").read_text(encoding="utf-8")
+        self.assertIn("self.style_manager.set_color_scheme", source)
+        self.assertNotIn("gtk-application-prefer-dark-theme", source)
+        self.assertNotIn("Gtk.Settings", source)
 
     def test_database_button_and_import_confirmation_are_semantic(self) -> None:
         app = (self.root / "sesyjka" / "app.py").read_text(encoding="utf-8")
@@ -279,18 +278,16 @@ class ApplicationSourceTests(unittest.TestCase):
         self.assertIn("export_sessions_csv", repository)
         self.assertIn('"All Day Event"', repository)
 
-    def test_table_backgrounds_style_real_rows_and_use_zebra_striping(self) -> None:
+    def test_table_styling_uses_supported_css_only(self) -> None:
         widgets = (self.root / "sesyjka" / "widgets.py").read_text(encoding="utf-8")
         app = (self.root / "sesyjka" / "app.py").read_text(encoding="utf-8")
-        self.assertIn('widget.get_css_name() == "row"', widgets)
-        self.assertIn('widget.add_css_class(row_css_class)', widgets)
-        self.assertNotIn('cell.add_css_class(row_css_class)', widgets)
-        self.assertNotIn("ROW_STRIPE_CLASSES", widgets)
-        self.assertIn(".data-table > listview > row:nth-child(even)", app)
-        self.assertIn(".data-table > listview > row > cell", app)
-        self.assertIn("background: transparent", app)
-        self.assertIn("row.status-collection-owned", app)
-        self.assertNotIn(".table-cell.status-collection-owned", app)
+        self.assertNotIn('widget.get_css_name() == "row"', widgets)
+        self.assertNotIn("get_parent()", widgets)
+        self.assertNotIn("GLib.idle_add", widgets)
+        self.assertNotIn("row.status-collection-", app)
+        self.assertNotIn("row:nth-child(even)", app)
+        self.assertIn(".data-table > listview > row:selected", app)
+        self.assertIn("background-color: alpha(@accent_color, 0.16)", app)
 
     def test_supplements_support_multiple_checkbox_subgroups(self) -> None:
         systems = (self.root / "sesyjka" / "pages" / "systems.py").read_text(encoding="utf-8")
