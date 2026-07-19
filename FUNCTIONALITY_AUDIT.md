@@ -4,15 +4,15 @@ Punktem odniesienia są `CLAUDE.MD` i sekcja funkcjonalności oraz changelogu z 
 
 ## Funkcje pokryte
 
-| Obszar źródłowy | Stan portu GTK4 0.8.3 |
+| Obszar źródłowy | Stan portu GTK4 0.8.4 |
 |---|---|
 | Cztery oddzielne bazy SQLite projektu źródłowego | Zachowane bez dodawania tabel planszówkowych: systemy, sesje, gracze i wydawcy |
 | Osobna kolekcja planszówek i karcianek | Dodana w niezależnym pliku `planszowe.db`, bez zmiany czterech baz źródłowych |
 | Systemy RPG, podręczniki i suplementy | CRUD oraz hierarchia system, podręcznik nadrzędny i pozycje podrzędne |
 | Status kolekcji i status gry | Dostępne w formularzu oraz tabeli. Wiersze Systemów RPG mają kolory zależne od statusu |
-| Fizyczne, PDF, VTT, język | Dostępne. Język wybierany z PL, ENG, DE, FR, ES, IT lub Inny |
+| Fizyczne, PDF, VTT, język | Dostępne |
 | Ceny zakupu i sprzedaży, waluty | Ceny fizyczna, PDF i VTT są warunkowe. Cena łączna jest wyliczana automatycznie. Cena sprzedaży jest widoczna tylko dla `Na sprzedaż` lub `Sprzedane` |
-| Rok wydania i ISBN | Dostępne. ISBN-10 i ISBN-13 są walidowane ostrzegawczo bez blokowania zapisu |
+| Rok wydania i ISBN | Dostępne |
 | Wydawca pozycji i systemu | Dostępny, z szybkim dodawaniem wydawcy z formularza |
 | Sortowanie hierarchii | Sortowanie rodzeństwa bez rozrywania relacji nadrzędnych |
 | Sortowanie tabel płaskich | Kliknięcie nagłówka kolumny |
@@ -41,10 +41,10 @@ Punktem odniesienia są `CLAUDE.MD` i sekcja funkcjonalności oraz changelogu z 
 | Graficzny kalendarz dat | Zastąpiony walidowanym polem `RRRR-MM-DD` |
 | Wykresy Matplotlib | Zastąpione natywnymi, dostępnymi wykresami ilości GTK4 |
 | Zapamiętywanie szerokości każdej kolumny | Kolumny można zmieniać, ale ich szerokości nie są jeszcze zapisywane |
-| Reguły kolorowania wierszy systemów | Zaimplementowane na poziomie pełnego widgetu wiersza dla statusów kolekcji |
-| Wielokrotny selektor typów suplementów | Checkboxy zapisujące wiele wartości w istniejącym polu tekstowym, rozdzielone separatorem ` | ` |
+| Reguły kolorowania wierszy systemów | Zaimplementowane kolory Adwaita dla statusów Grane, Nie grane, Planowane i Ukończone |
+| Wielokrotny selektor typów suplementów | Pole podgrupy jest elastycznym tekstem i może przechowywać kilka tagów rozdzielonych przecinkami |
 | Osobny ekran historii uczestnictwa gracza | Udział graczy jest dostępny w statystykach, bez osobnego widoku historii |
 
 ## Wnioski
 
-Port zachowuje podstawowy przepływ pracy programu źródłowego: katalog kolekcji RPG, sesje, gracze, wydawcy, statystyki, filtry, transfer i bezpieczeństwo czterech baz. Wersja 0.8.3 obejmuje kolekcję planszówek i karcianek jako niezależne rozszerzenie w piątym pliku. Nie zmienia schematów czterech baz projektu źródłowego.
+Port zachowuje podstawowy przepływ pracy programu źródłowego: katalog kolekcji RPG, sesje, gracze, wydawcy, statystyki, filtry, transfer i bezpieczeństwo czterech baz. Wersja 0.8.4 obejmuje kolekcję planszówek i karcianek jako niezależne rozszerzenie w piątym pliku. Nie zmienia schematów czterech baz projektu źródłowego.

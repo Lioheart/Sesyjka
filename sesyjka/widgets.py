@@ -122,6 +122,7 @@ class DataTable(Gtk.Box):
         tree_key: str = "nazwa",
         enable_filters: bool = True,
         enable_sorting: bool = True,
+        link_columns: dict[str, str] | None = None,
     ) -> None:
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         self.columns = list(columns)
@@ -129,6 +130,7 @@ class DataTable(Gtk.Box):
         self.tree_key = tree_key
         self.enable_filters = enable_filters
         self.enable_sorting = enable_sorting
+        self.link_columns = dict(link_columns or {})
         self.add_css_class("data-table-shell")
 
         self._source_records: list[dict[str, Any]] = []
@@ -253,12 +255,20 @@ class DataTable(Gtk.Box):
         cell.set_vexpand(True)
         cell.add_css_class("table-cell")
 
-        label = Gtk.Label(xalign=0.0)
-        label.set_hexpand(True)
-        label.set_ellipsize(Pango.EllipsizeMode.END)
-        if index == 0:
-            label.add_css_class("numeric")
-        cell.append(label)
+        key = self.columns[index][1]
+        if key in self.link_columns:
+            content: Gtk.Widget = Gtk.LinkButton.new_with_label("about:blank", "")
+            content.set_hexpand(True)
+            content.set_halign(Gtk.Align.START)
+            content.add_css_class("table-link")
+        else:
+            label = Gtk.Label(xalign=0.0)
+            label.set_hexpand(True)
+            label.set_ellipsize(Pango.EllipsizeMode.END)
+            if index == 0:
+                label.add_css_class("numeric")
+            content = label
+        cell.append(content)
 
         gesture = Gtk.GestureClick()
         gesture.set_button(3)
@@ -274,20 +284,32 @@ class DataTable(Gtk.Box):
     ) -> None:
         row = item.get_item()
         cell = item.get_child()
-        label = cell.get_first_child() if isinstance(cell, Gtk.Box) else None
-        if isinstance(row, TableRow) and isinstance(cell, Gtk.Box) and isinstance(label, Gtk.Label):
-            label.set_text(row.values[index] if index < len(row.values) else "")
-            if row.record.get("_is_group"):
-                label.add_css_class("heading")
-            else:
-                label.remove_css_class("heading")
+        content = cell.get_first_child() if isinstance(cell, Gtk.Box) else None
+        if not isinstance(row, TableRow) or not isinstance(cell, Gtk.Box):
+            return
 
-            # Gtk.ColumnView tworzy jeden wewnętrzny widget CSS ``row`` dla
-            # całego rekordu. Kolor jest przypisywany właśnie temu widgetowi,
-            # a nie kontenerom poszczególnych komórek. Dzięki temu tło jest
-            # ciągłe na pełnej szerokości wiersza, również pod separatorami.
-            if not self._style_row_from_cell(cell, row.record):
-                GLib.idle_add(self._style_row_after_bind, item, row)
+        text = row.values[index] if index < len(row.values) else ""
+        key = self.columns[index][1]
+        if isinstance(content, Gtk.LinkButton):
+            uri_key = self.link_columns.get(key, "")
+            uri = str(row.record.get(uri_key) or "")
+            content.set_label(text)
+            content.set_uri(uri or "about:blank")
+            content.set_sensitive(bool(uri))
+            content.set_tooltip_text(uri or None)
+        elif isinstance(content, Gtk.Label):
+            content.set_text(text)
+            if row.record.get("_is_group"):
+                content.add_css_class("heading")
+            else:
+                content.remove_css_class("heading")
+
+        # Gtk.ColumnView tworzy jeden wewnętrzny widget CSS ``row`` dla
+        # całego rekordu. Kolor jest przypisywany właśnie temu widgetowi,
+        # a nie kontenerom poszczególnych komórek. Dzięki temu tło jest
+        # ciągłe na pełnej szerokości wiersza, również pod separatorami.
+        if not self._style_row_from_cell(cell, row.record):
+            GLib.idle_add(self._style_row_after_bind, item, row)
 
     def _style_row_after_bind(self, item: Gtk.ListItem, expected_row: TableRow) -> bool:
         if item.get_item() is not expected_row:

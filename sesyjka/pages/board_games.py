@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 import gi
@@ -9,7 +10,7 @@ from gi.repository import Gtk
 
 from ..dialogs import ModalWindow, info, make_entry
 from ..repository import Repository
-from ..widgets import FormGrid, TextDropDown
+from ..widgets import Choice, ChoiceDropDown, FormGrid, TextDropDown
 from .base import CrudPage
 
 
@@ -40,12 +41,80 @@ class BoardGamesPage(CrudPage):
     def delete_record(self, record_id: int) -> None:
         self.repository.delete_board_game(record_id)
 
+    def _publisher_choices(self) -> list[Choice]:
+        return [
+            Choice(None, "Brak"),
+            *[
+                Choice(int(row["id"]), str(row["nazwa"]))
+                for row in self.repository.publishers()
+            ],
+        ]
+
+    def _publisher_selector(
+        self,
+        dialog_parent: Gtk.Window,
+        selected_id: int | None = None,
+    ) -> tuple[Gtk.Box, ChoiceDropDown]:
+        selector = ChoiceDropDown(self._publisher_choices(), selected_id)
+        add_publisher = Gtk.Button(label="Dodaj wydawcę")
+        add_publisher.set_tooltip_text("Dodaj wydawcę bez zamykania formularza")
+
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        selector.set_hexpand(True)
+        row.append(selector)
+        row.append(add_publisher)
+
+        def refresh_after_add(publisher_id: int) -> None:
+            selector.set_choices(self._publisher_choices(), publisher_id)
+            self.notify_data_changed()
+
+        add_publisher.connect(
+            "clicked",
+            lambda _button: self._open_quick_publisher_editor(
+                dialog_parent,
+                refresh_after_add,
+            ),
+        )
+        return row, selector
+
+    def _open_quick_publisher_editor(
+        self,
+        parent: Gtk.Window,
+        on_saved: Callable[[int], None],
+    ) -> None:
+        dialog = ModalWindow(parent, "Dodaj wydawcę", width=520, height=360)
+        form = FormGrid()
+        name = make_entry(placeholder="Nazwa wydawcy")
+        country = make_entry(placeholder="Kraj")
+        website = make_entry(placeholder="https://...")
+        form.add_row("Nazwa *", name)
+        form.add_row("Kraj", country)
+        form.add_row("Strona WWW", website)
+        dialog.add_scrolled_content(form)
+
+        def save() -> None:
+            try:
+                publisher_id = self.repository.save_publisher(
+                    {
+                        "nazwa": name.get_text(),
+                        "kraj": country.get_text(),
+                        "strona": website.get_text(),
+                    }
+                )
+                dialog.close()
+                on_saved(publisher_id)
+            except Exception as exc:
+                info(dialog, "Błąd zapisu", str(exc), error=True)
+
+        dialog.add_buttons(save)
+        dialog.present()
+
     def open_editor(self, record: dict[str, Any] | None) -> None:
         dialog = ModalWindow(
             self.parent_window,
             "Edytuj grę" if record else "Dodaj grę planszową lub karcianą",
             width=660,
-            height=720,
+            height=680,
         )
         form = FormGrid()
         name = make_entry(record.get("nazwa") if record else "", "Nazwa gry")
@@ -68,13 +137,11 @@ class BoardGamesPage(CrudPage):
             ["W kolekcji", "Na sprzedaż", "Sprzedane", "Nieposiadane", "Do kupienia", "Pożyczone"],
             str(record.get("status_kolekcja") or "W kolekcji") if record else "W kolekcji",
         )
-        publisher = make_entry(record.get("wydawca") if record else "", "Wydawca")
+        publisher_row, publisher = self._publisher_selector(
+            dialog,
+            int(record["wydawca_id"]) if record and record.get("wydawca_id") is not None else None,
+        )
         year = make_entry(record.get("rok_wydania") if record else "", "RRRR")
-        notes = Gtk.TextView()
-        notes.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
-        notes.set_size_request(-1, 120)
-        if record and record.get("notatki"):
-            notes.get_buffer().set_text(str(record["notatki"]))
 
         form.add_row("Nazwa *", name)
         form.add_row("Typ *", game_type)
@@ -87,16 +154,11 @@ class BoardGamesPage(CrudPage):
         form.add_row("Waluta", currency)
         form.add_row("Status gry", game_status)
         form.add_row("Status kolekcji", collection_status)
-        form.add_row("Wydawca", publisher)
+        form.add_row("Wydawca", publisher_row)
         form.add_row("Rok wydania", year)
-        notes_frame = Gtk.Frame(label="Notatki")
-        notes_frame.set_child(notes)
-        form.add_full(notes_frame)
         dialog.add_scrolled_content(form)
 
         def save() -> None:
-            buffer = notes.get_buffer()
-            note = buffer.get_text(buffer.get_start_iter(), buffer.get_end_iter(), True)
             try:
                 self.repository.save_board_game(
                     {
@@ -111,9 +173,8 @@ class BoardGamesPage(CrudPage):
                         "waluta": currency.get_text(),
                         "status_gra": game_status.text(),
                         "status_kolekcja": collection_status.text(),
-                        "wydawca": publisher.get_text(),
+                        "wydawca_id": publisher.identifier(),
                         "rok_wydania": year.get_text(),
-                        "notatki": note,
                     },
                     int(record["id"]) if record else None,
                 )

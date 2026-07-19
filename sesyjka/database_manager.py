@@ -100,6 +100,7 @@ class DatabaseManager:
                 "waluta",
                 "status_gra",
                 "status_kolekcja",
+                "wydawca_id",
                 "wydawca",
                 "rok_wydania",
                 "notatki",
@@ -394,6 +395,14 @@ class DatabaseManager:
 
 
     def _init_board_games(self) -> None:
+        publisher_ids = {
+            str(row["nazwa"]).strip().casefold(): int(row["id"])
+            for row in self.table_rows(
+                "wydawcy.db",
+                "SELECT id, nazwa FROM wydawcy",
+            )
+            if str(row["nazwa"] or "").strip()
+        }
         with self.connect("planszowe.db", write=True) as connection:
             connection.execute(
                 """
@@ -410,6 +419,7 @@ class DatabaseManager:
                     waluta TEXT DEFAULT 'PLN',
                     status_gra TEXT DEFAULT 'Nie grane',
                     status_kolekcja TEXT DEFAULT 'W kolekcji',
+                    wydawca_id INTEGER,
                     wydawca TEXT,
                     rok_wydania INTEGER,
                     notatki TEXT
@@ -430,11 +440,31 @@ class DatabaseManager:
                     "waluta": "TEXT DEFAULT 'PLN'",
                     "status_gra": "TEXT DEFAULT 'Nie grane'",
                     "status_kolekcja": "TEXT DEFAULT 'W kolekcji'",
+                    "wydawca_id": "INTEGER",
                     "wydawca": "TEXT",
                     "rok_wydania": "INTEGER",
                     "notatki": "TEXT",
                 },
             )
+
+            # Wersje 0.8.0-0.8.3 przechowywały wydawcę wyłącznie jako tekst.
+            # Relacja między osobnymi plikami SQLite jest egzekwowana w Pythonie.
+            # Przy migracji wiążemy dokładnie pasujące nazwy bez usuwania pola
+            # tekstowego, aby starsze wydania nadal mogły odczytać bazę.
+            legacy_rows = connection.execute(
+                """
+                SELECT id, wydawca
+                FROM planszowe
+                WHERE wydawca_id IS NULL AND TRIM(COALESCE(wydawca, '')) <> ''
+                """
+            ).fetchall()
+            for row in legacy_rows:
+                publisher_id = publisher_ids.get(str(row["wydawca"]).strip().casefold())
+                if publisher_id is not None:
+                    connection.execute(
+                        "UPDATE planszowe SET wydawca_id=? WHERE id=?",
+                        (publisher_id, int(row["id"])),
+                    )
 
     def has_active_database(self, filename: str) -> bool:
         if filename not in DB_FILES:

@@ -138,6 +138,44 @@ class ApplicationSourceTests(unittest.TestCase):
         self.assertIn("--purge-data", uninstall)
         self.assertIn("XDG_DATA_HOME", uninstall)
 
+
+    def test_game_system_editor_omits_publisher_and_language_fields(self) -> None:
+        source = (self.root / "sesyjka" / "pages" / "systems.py").read_text(
+            encoding="utf-8"
+        )
+        start = source.index("    def open_game_system_editor")
+        end = source.index("    def open_editor", start)
+        editor = source[start:end]
+        self.assertIn('form.add_row("Nazwa *", name)', editor)
+        self.assertIn('form.add_row("Notatki", notes)', editor)
+        self.assertNotIn('form.add_row("Wydawca"', editor)
+        self.assertNotIn('form.add_row("Język"', editor)
+
+    def test_board_games_use_publisher_database_without_notes_field(self) -> None:
+        source = (self.root / "sesyjka" / "pages" / "board_games.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("ChoiceDropDown", source)
+        self.assertIn("self.repository.publishers()", source)
+        self.assertIn('"wydawca_id": publisher.identifier()', source)
+        self.assertIn('Gtk.Button(label="Dodaj wydawcę")', source)
+        self.assertNotIn('Gtk.Frame(label="Notatki")', source)
+        self.assertNotIn('"notatki": note', source)
+
+    def test_publisher_website_column_uses_clickable_link_button(self) -> None:
+        publisher_source = (
+            self.root / "sesyjka" / "pages" / "publishers.py"
+        ).read_text(encoding="utf-8")
+        widget_source = (self.root / "sesyjka" / "widgets.py").read_text(
+            encoding="utf-8"
+        )
+        repository_source = (self.root / "sesyjka" / "repository.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('link_columns={"strona": "strona_uri"}', publisher_source)
+        self.assertIn("Gtk.LinkButton.new_with_label", widget_source)
+        self.assertIn('item["strona_uri"]', repository_source)
+
     def test_requested_screenshot_set_is_bundled(self) -> None:
         screenshot_dir = self.root / "screenshots"
         expected = {"image.png", *(f"image{index}.png" for index in range(2, 12))}

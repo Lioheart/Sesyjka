@@ -63,6 +63,10 @@ BASE_CSS = """
   border-radius: 0;
   background: none;
 }
+.table-link {
+  padding: 0;
+  min-height: 0;
+}
 .data-table > listview > row {
   background-color: @view_bg_color;
 }
@@ -613,6 +617,9 @@ class SesyjkaWindow(Adw.ApplicationWindow):
     def show_history(self) -> None:
         dialog = ModalWindow(self, "Historia zmian", width=720, height=620)
         history_text = (
+            "0.8.4\n"
+            "Uproszczono formularz systemu gry, powiązano planszówki i karcianki z bazą wydawców, "
+            "usunięto notatki z ich formularza oraz dodano klikalne strony WWW wydawców.\n\n"
             "0.8.3\n"
             "Kolory statusu są przypisywane wewnętrznym widgetom całych wierszy, a pasy używają selektorów CSS GTK. "
             "Podgrupy suplementów są zapisywane separatorem |, język wybiera się z listy, a niepoprawny ISBN wyświetla ostrzeżenie bez blokowania zapisu.\n\n"

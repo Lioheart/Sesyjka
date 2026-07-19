@@ -311,26 +311,16 @@ class SystemsPage(CrudPage):
             self.parent_window,
             "Edytuj system gry" if record else "Dodaj system gry",
             width=560,
-            height=430,
+            height=360,
         )
         form = FormGrid()
         name = make_entry(record.get("nazwa") if record else "", "Nazwa systemu gry")
-        publisher_row, publisher = self._publisher_selector(
-            dialog,
-            record.get("wydawca_id") if record else None,
-        )
-        language = TextDropDown(
-            LANGUAGE_CHOICES,
-            normalize_language_choice(record.get("jezyk") if record else "PL"),
-        )
         notes = Gtk.TextView()
         notes.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
-        notes.set_size_request(-1, 100)
+        notes.set_size_request(-1, 120)
         if record and record.get("notatki"):
             notes.get_buffer().set_text(str(record["notatki"]))
         form.add_row("Nazwa *", name)
-        form.add_row("Wydawca", publisher_row)
-        form.add_row("Język", language)
         form.add_row("Notatki", notes)
         dialog.add_scrolled_content(form)
 
@@ -341,8 +331,6 @@ class SystemsPage(CrudPage):
                 self.repository.save_game_system(
                     {
                         "nazwa": name.get_text(),
-                        "wydawca_id": publisher.identifier(),
-                        "jezyk": language.text(),
                         "notatki": text,
                     },
                     int(record["game_system_id"]) if record else None,

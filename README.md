@@ -1,4 +1,4 @@
-# Sesyjka GTK4 0.8.3
+# Sesyjka GTK4 0.8.4
 
 Natywna aplikacja dla Linuksa zbudowana w Pythonie, GTK4 i Libadwaita. Program kataloguje systemy RPG, podręczniki, suplementy, sesje, graczy, wydawców oraz gry planszowe i karciane.
 
@@ -14,11 +14,20 @@ Formularz pozycji RPG zawsze pokazuje nazwę, typ, system RPG, wydawcę, formaty
 
 Zakładka **Sesje RPG** przypisuje sesje do systemów gry. Formularz obsługuje mistrza gry, sesje GM-less, kampanie, jednostrzały, tryb gry, przygody, notatki i grupy graczy. Zapis sesji bez co najmniej jednego istniejącego gracza jest blokowany. Sesje można eksportować do iCalendar `.ics` oraz do formatu `.csv` używanego między innymi przez import kalendarza Google.
 
-Zakładka **Gry planszowe** korzysta z osobnej bazy `planszowe.db`. Przechowuje gry planszowe i karciane, zakres liczby graczy, czas rozgrywki, minimalny wiek, cenę, walutę, status gry, status kolekcji, wydawcę, rok wydania i notatki.
+Zakładka **Gry planszowe** korzysta z osobnej bazy `planszowe.db`. Przechowuje gry planszowe i karciane, zakres liczby graczy, czas rozgrywki, minimalny wiek, cenę, walutę, status gry, status kolekcji, wydawcę, rok wydania. Wydawca jest wybierany bezpośrednio z bazy `wydawcy.db`, a jego usunięcie jest blokowane, gdy pozostaje powiązany z grą.
 
 Statystyki obejmują systemy RPG, sesje, graczy, wydawców, formaty fizyczne i PDF, łączną liczbę planszówek i karcianek oraz sumę cen zakupu wszystkich pozycji RPG i gier stołowych, podaną osobno dla każdej waluty. Wykres gier stołowych pokazuje osobno planszówki i karcianki. Dwie tabele zestawień są rozdzielone odstępem i pionowym separatorem.
 
 Transfer danych obejmuje eksport ZIP, eksport do folderu, eksport XLSX, eksport sesji do ICS i CSV, import z walidacją i kopią zapasową oraz tryb gościa tylko do odczytu.
+
+## Zmiany w 0.8.4
+
+- formularz systemu gry zawiera wyłącznie nazwę i notatki, bez pól wydawcy oraz języka
+- gry planszowe i karciane wybierają wydawcę z bazy `wydawcy.db`, z możliwością szybkiego dodania nowego wydawcy
+- `planszowe.db` przechowuje `wydawca_id`, zachowując tekstową nazwę dla zgodności z wersjami 0.8.0-0.8.3
+- starsze tekstowe nazwy wydawców są automatycznie wiązane z identyfikatorem przy dokładnym dopasowaniu nazwy
+- pole notatek zostało usunięte z formularza gier planszowych i karcianych, bez kasowania istniejącej kolumny ani danych
+- adres WWW wydawcy jest klikalny w tabeli i otwiera się w domyślnej przeglądarce
 
 ## Zmiany w 0.8.3
 
@@ -57,7 +66,7 @@ planszowe.db
 
 Pierwsze cztery pliki zachowują schematy zgodne z projektem `ZuraffPL/sesyjka`. Nowa funkcja planszówek nie dodaje tabel ani kolumn do tych baz. Jest przechowywana wyłącznie w `planszowe.db`.
 
-Import i tryb gościa nadal akceptują zestaw zawierający tylko cztery oryginalne bazy. W takim przypadku zakładka gier planszowych pozostaje pusta. Eksport tworzony przez wersję 0.8.3 zawiera pięć baz.
+Import i tryb gościa nadal akceptują zestaw zawierający tylko cztery oryginalne bazy. W takim przypadku zakładka gier planszowych pozostaje pusta. Eksport tworzony przez wersję 0.8.4 zawiera pięć baz.
 
 Log diagnostyczny:
 

@@ -23,6 +23,7 @@ class CrudPage(Gtk.Box):
         *,
         grouped: bool = False,
         tree_key: str = "nazwa",
+        link_columns: dict[str, str] | None = None,
     ) -> None:
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         self.parent_window = parent_window
@@ -63,7 +64,12 @@ class CrudPage(Gtk.Box):
         toolbar.append(refresh)
         self.append(toolbar)
 
-        self.table = DataTable(columns, grouped=grouped, tree_key=tree_key)
+        self.table = DataTable(
+            columns,
+            grouped=grouped,
+            tree_key=tree_key,
+            link_columns=link_columns,
+        )
         self.table.connect_activate(self.open_editor)
         self.table.set_context_actions(self.open_editor, self.request_delete)
         self.table.set_view_changed_callback(self.update_status)

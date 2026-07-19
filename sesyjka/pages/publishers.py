@@ -20,6 +20,7 @@ class PublishersPage(CrudPage):
             repository,
             (("ID", "id"), ("Nazwa", "nazwa"), ("Kraj", "kraj"), ("Strona", "strona")),
             "wydawcę",
+            link_columns={"strona": "strona_uri"},
         )
 
     def load_records(self) -> list[dict[str, Any]]:

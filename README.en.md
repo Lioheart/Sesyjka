@@ -1,10 +1,19 @@
-# Sesyjka GTK4 0.8.3
+# Sesyjka GTK4 0.8.4
 
-A native Linux application built with Python, GTK4 and Libadwaita. It manages tabletop RPG systems, books, supplements, sessions, players, publishers and four compatible SQLite databases.
+A native Linux application built with Python, GTK4 and Libadwaita. It manages tabletop RPG systems, books, supplements, sessions, players, publishers, board games and card games. The four original SQLite databases remain compatible, while board and card games use a separate fifth database.
 
 Result repository: https://github.com/Lioheart/Sesyjka
 
 Original project and attribution: https://github.com/ZuraffPL/sesyjka
+
+## Changes in 0.8.4
+
+- the game-system editor now exposes only the name and notes fields
+- board and card games select publishers from `wydawcy.db` and can create a publisher without closing the form
+- `planszowe.db` stores `wydawca_id` while retaining the publisher name for backward compatibility
+- legacy publisher names are linked automatically when an exact case-insensitive match exists
+- board-game notes were removed from the editor without dropping the legacy database column
+- publisher websites are clickable in the table and open in the default browser
 
 ## Changes in 0.8.3
 

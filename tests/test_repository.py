@@ -106,6 +106,111 @@ class RepositoryTests(unittest.TestCase):
         self.repository.delete_session(session_id)
         self.assertEqual(self.repository.sessions(), [])
 
+
+    def test_publisher_website_is_exposed_as_clickable_http_uri(self) -> None:
+        self.repository.save_publisher(
+            {"nazwa": "Wydawca WWW", "strona": "example.org/katalog"}
+        )
+        record = self.repository.publishers()[0]
+        self.assertEqual(record["strona"], "example.org/katalog")
+        self.assertEqual(record["strona_uri"], "https://example.org/katalog")
+
+    def test_board_game_publisher_relation_and_rename_are_preserved(self) -> None:
+        publisher_id = self.repository.save_publisher({"nazwa": "Stary wydawca"})
+        board_id = self.repository.save_board_game(
+            {
+                "nazwa": "Gra powiązana",
+                "wydawca_id": publisher_id,
+            }
+        )
+        record = next(item for item in self.repository.board_games() if item["id"] == board_id)
+        self.assertEqual(record["wydawca_id"], publisher_id)
+        self.assertEqual(record["wydawca"], "Stary wydawca")
+
+        with self.assertRaisesRegex(ValueError, "gry planszowe"):
+            self.repository.delete_publisher(publisher_id)
+
+        self.repository.save_publisher({"nazwa": "Nowy wydawca"}, publisher_id)
+        record = next(item for item in self.repository.board_games() if item["id"] == board_id)
+        self.assertEqual(record["wydawca"], "Nowy wydawca")
+        with sqlite3.connect(self.root / "planszowe.db") as connection:
+            stored = connection.execute(
+                "SELECT wydawca_id, wydawca, notatki FROM planszowe WHERE id=?",
+                (board_id,),
+            ).fetchone()
+        self.assertEqual(stored[0], publisher_id)
+        self.assertEqual(stored[1], "Nowy wydawca")
+        self.assertIsNone(stored[2])
+
+    def test_legacy_board_game_publisher_name_is_migrated_to_identifier(self) -> None:
+        legacy_root = self.root / "legacy-board-games"
+        legacy_root.mkdir()
+        with sqlite3.connect(legacy_root / "wydawcy.db") as connection:
+            connection.execute(
+                "CREATE TABLE wydawcy (id INTEGER PRIMARY KEY, nazwa TEXT NOT NULL, strona TEXT, kraj TEXT)"
+            )
+            connection.execute(
+                "INSERT INTO wydawcy (id, nazwa) VALUES (7, 'Wydawca legacy')"
+            )
+        with sqlite3.connect(legacy_root / "planszowe.db") as connection:
+            connection.execute(
+                """
+                CREATE TABLE planszowe (
+                    id INTEGER PRIMARY KEY,
+                    nazwa TEXT NOT NULL,
+                    typ TEXT NOT NULL DEFAULT 'Gra planszowa',
+                    min_graczy INTEGER NOT NULL DEFAULT 1,
+                    max_graczy INTEGER NOT NULL DEFAULT 1,
+                    czas_min INTEGER,
+                    czas_max INTEGER,
+                    minimalny_wiek INTEGER,
+                    cena REAL,
+                    waluta TEXT DEFAULT 'PLN',
+                    status_gra TEXT DEFAULT 'Nie grane',
+                    status_kolekcja TEXT DEFAULT 'W kolekcji',
+                    wydawca TEXT,
+                    rok_wydania INTEGER,
+                    notatki TEXT
+                )
+                """
+            )
+            connection.execute(
+                "INSERT INTO planszowe (id, nazwa, wydawca, notatki) VALUES (1, 'Legacy', 'wydawca LEGACY', 'zachowaj')"
+            )
+
+        databases = DatabaseManager(legacy_root)
+        databases.initialize()
+        repository = Repository(databases)
+        record = repository.board_games()[0]
+        self.assertEqual(record["wydawca_id"], 7)
+        self.assertEqual(record["wydawca"], "Wydawca legacy")
+        with sqlite3.connect(legacy_root / "planszowe.db") as connection:
+            columns = {row[1] for row in connection.execute("PRAGMA table_info(planszowe)")}
+            stored = connection.execute(
+                "SELECT wydawca_id, wydawca, notatki FROM planszowe WHERE id=1"
+            ).fetchone()
+        self.assertIn("wydawca_id", columns)
+        self.assertEqual(stored, (7, "wydawca LEGACY", "zachowaj"))
+
+    def test_editing_game_system_without_hidden_fields_preserves_legacy_values(self) -> None:
+        publisher_id = self.repository.save_publisher({"nazwa": "Legacy"})
+        system_id = self.repository.save_game_system(
+            {
+                "nazwa": "System przed edycją",
+                "wydawca_id": publisher_id,
+                "jezyk": "PL",
+                "notatki": "Stare notatki",
+            }
+        )
+        self.repository.save_game_system(
+            {"nazwa": "System po edycji", "notatki": "Nowe notatki"},
+            system_id,
+        )
+        record = next(item for item in self.repository.game_systems() if item["id"] == system_id)
+        self.assertEqual(record["wydawca_id"], publisher_id)
+        self.assertEqual(record["jezyk"], "PL")
+        self.assertEqual(record["notatki"], "Nowe notatki")
+
     def test_export_zip_contains_databases(self) -> None:
         destination = self.root / "export.zip"
         result = self.databases.export_zip(destination)

@@ -7,6 +7,7 @@ from decimal import Decimal, InvalidOperation
 import re
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from .database_manager import DatabaseManager
 
@@ -18,6 +19,18 @@ def _clean(value: Any) -> Any:
     return value
 
 
+def _website_uri(value: Any) -> str:
+    """Zwróć bezpieczny adres HTTP(S) do otwarcia w przeglądarce."""
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    candidate = text if "://" in text else f"https://{text}"
+    parsed = urlsplit(candidate)
+    if parsed.scheme.casefold() not in {"http", "https"} or not parsed.netloc:
+        return ""
+    return candidate
+
+
 class Repository:
     def __init__(self, databases: DatabaseManager) -> None:
         self.db = databases
@@ -27,7 +40,12 @@ class Repository:
             "wydawcy.db",
             "SELECT id, nazwa, strona, kraj FROM wydawcy ORDER BY nazwa COLLATE NOCASE",
         )
-        return [dict(row) for row in rows]
+        result: list[dict[str, Any]] = []
+        for row in rows:
+            item = dict(row)
+            item["strona_uri"] = _website_uri(item.get("strona"))
+            result.append(item)
+        return result
 
     def save_publisher(self, values: dict[str, Any], record_id: int | None = None) -> int:
         name = str(values.get("nazwa", "")).strip()
@@ -45,6 +63,21 @@ class Repository:
                     "UPDATE wydawcy SET nazwa=?, strona=?, kraj=? WHERE id=?",
                     (name, _clean(values.get("strona")), _clean(values.get("kraj")), record_id),
                 )
+
+        # planszowe.db przechowuje identyfikator relacji oraz tekstową nazwę
+        # kompatybilną z wersjami 0.8.0-0.8.3. Synchronizacja nazwy pozwala
+        # starszym wydaniom nadal poprawnie wyświetlić rekord.
+        if self.db.has_active_database("planszowe.db"):
+            with self.db.connect("planszowe.db", write=True) as connection:
+                columns = {
+                    str(row[1])
+                    for row in connection.execute("PRAGMA table_info(planszowe)")
+                }
+                if {"wydawca_id", "wydawca"}.issubset(columns):
+                    connection.execute(
+                        "UPDATE planszowe SET wydawca=? WHERE wydawca_id=?",
+                        (name, record_id),
+                    )
         return record_id
 
     def delete_publisher(self, record_id: int) -> None:
@@ -62,9 +95,23 @@ class Repository:
                 (record_id,),
             )[0]["count"]
         )
-        if linked_positions or linked_systems:
+        linked_board_games = 0
+        if self.db.has_active_database("planszowe.db"):
+            with self.db.connect("planszowe.db") as connection:
+                columns = {
+                    str(row[1])
+                    for row in connection.execute("PRAGMA table_info(planszowe)")
+                }
+                if "wydawca_id" in columns:
+                    row = connection.execute(
+                        "SELECT COUNT(*) AS count FROM planszowe WHERE wydawca_id=?",
+                        (record_id,),
+                    ).fetchone()
+                    linked_board_games = int(row["count"] if row else 0)
+        if linked_positions or linked_systems or linked_board_games:
             raise ValueError(
-                "Nie można usunąć wydawcy używanego przez systemy lub pozycje RPG."
+                "Nie można usunąć wydawcy używanego przez systemy, pozycje RPG "
+                "albo gry planszowe i karciane."
             )
         with self.db.connect("wydawcy.db", write=True) as connection:
             connection.execute("DELETE FROM wydawcy WHERE id=?", (record_id,))
@@ -166,7 +213,36 @@ class Repository:
         name = str(values.get("nazwa", "")).strip()
         if not name:
             raise ValueError("Nazwa systemu gry jest wymagana.")
-        publisher_id = values.get("wydawca_id")
+
+        existing: dict[str, Any] = {}
+        if record_id is not None:
+            rows = self.db.table_rows(
+                "systemy_rpg.db",
+                "SELECT wydawca_id, jezyk, notatki FROM systemy_gry WHERE id=?",
+                (record_id,),
+            )
+            if not rows:
+                raise ValueError("Edytowany system gry nie istnieje.")
+            existing = dict(rows[0])
+
+        # Interfejs 0.8.4 nie eksponuje wydawcy ani języka systemu gry.
+        # Parametry pozostają obsługiwane w API, aby nie usuwać danych zapisanych
+        # przez wcześniejsze wydania oraz zachować zgodność z bazą źródłową.
+        publisher_id = (
+            values.get("wydawca_id")
+            if "wydawca_id" in values
+            else existing.get("wydawca_id")
+        )
+        language = (
+            _clean(values.get("jezyk"))
+            if "jezyk" in values
+            else existing.get("jezyk")
+        )
+        notes = (
+            _clean(values.get("notatki"))
+            if "notatki" in values
+            else existing.get("notatki")
+        )
         if publisher_id is not None:
             valid_publishers = {int(item["id"]) for item in self.publishers()}
             if int(publisher_id) not in valid_publishers:
@@ -174,8 +250,8 @@ class Repository:
         payload = (
             name,
             int(publisher_id) if publisher_id is not None else None,
-            _clean(values.get("jezyk")),
-            _clean(values.get("notatki")),
+            language,
+            notes,
         )
         with self.db.connect("systemy_rpg.db", write=True) as connection:
             if record_id is None:
@@ -517,18 +593,25 @@ class Repository:
     def board_games(self) -> list[dict[str, Any]]:
         if not self.db.has_active_database("planszowe.db"):
             return []
+        publishers = {int(row["id"]): str(row["nazwa"]) for row in self.publishers()}
         rows = self.db.table_rows(
             "planszowe.db",
             """
             SELECT id, nazwa, typ, min_graczy, max_graczy, czas_min, czas_max,
                    minimalny_wiek, cena, waluta, status_gra, status_kolekcja,
-                   wydawca, rok_wydania, notatki
+                   wydawca_id, wydawca, rok_wydania
             FROM planszowe ORDER BY nazwa COLLATE NOCASE
             """,
         )
         result: list[dict[str, Any]] = []
         for row in rows:
             item = dict(row)
+            publisher_id = item.get("wydawca_id")
+            item["wydawca"] = (
+                publishers.get(int(publisher_id), "")
+                if publisher_id is not None
+                else str(item.get("wydawca") or "")
+            )
             minimum = int(item.get("min_graczy") or 1)
             maximum = int(item.get("max_graczy") or minimum)
             item["liczba_graczy_tekst"] = str(minimum) if minimum == maximum else f"{minimum}-{maximum}"
@@ -599,10 +682,29 @@ class Repository:
             if price < 0:
                 raise ValueError("Cena nie może być ujemna.")
 
+        publishers = {int(item["id"]): str(item["nazwa"]) for item in self.publishers()}
+        publisher_id = values.get("wydawca_id")
+        legacy_publisher = _clean(values.get("wydawca"))
+        if publisher_id is None and legacy_publisher:
+            matching = [
+                identifier
+                for identifier, label in publishers.items()
+                if label.casefold() == str(legacy_publisher).casefold()
+            ]
+            if matching:
+                publisher_id = matching[0]
+            else:
+                raise ValueError("Wybierz wydawcę istniejącego w bazie wydawców.")
+        if publisher_id is not None:
+            publisher_id = int(publisher_id)
+            if publisher_id not in publishers:
+                raise ValueError("Wybrany wydawca nie istnieje w bazie wydawców.")
+        publisher_name = publishers.get(publisher_id) if publisher_id is not None else None
+
         fields = (
             "nazwa", "typ", "min_graczy", "max_graczy", "czas_min", "czas_max",
             "minimalny_wiek", "cena", "waluta", "status_gra", "status_kolekcja",
-            "wydawca", "rok_wydania", "notatki",
+            "wydawca_id", "wydawca", "rok_wydania",
         )
         normalized = {
             "nazwa": name,
@@ -616,9 +718,9 @@ class Repository:
             "waluta": _clean(values.get("waluta")) or "PLN",
             "status_gra": _clean(values.get("status_gra")) or "Nie grane",
             "status_kolekcja": _clean(values.get("status_kolekcja")) or "W kolekcji",
-            "wydawca": _clean(values.get("wydawca")),
+            "wydawca_id": publisher_id,
+            "wydawca": publisher_name,
             "rok_wydania": year,
-            "notatki": _clean(values.get("notatki")),
         }
         payload = [normalized[field] for field in fields]
         with self.db.connect("planszowe.db", write=True) as connection:
