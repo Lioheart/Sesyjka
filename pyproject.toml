@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sesyjka-gtk4"
+version = "0.6.4"
+description = "Native GTK4 and Libadwaita client for managing tabletop RPG collections and sessions"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "CC-BY-4.0"
+authors = [{name = "Sesyjka contributors"}]
+dependencies = [
+  "openpyxl>=3.1",
+]
+
+[project.scripts]
+sesyjka = "sesyjka.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["sesyjka*"]
+
+[tool.pyright]
+pythonVersion = "3.10"
+typeCheckingMode = "basic"
+reportMissingImports = false
+
+
+[tool.setuptools.package-data]
+sesyjka = ["resources/icons/hicolor/scalable/apps/*.svg"]

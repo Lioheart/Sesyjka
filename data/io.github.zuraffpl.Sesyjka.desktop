@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Sesyjka
+Comment=Manage tabletop RPG collections and sessions
+Comment[pl]=Zarządzanie kolekcją i sesjami RPG
+Exec=sesyjka
+Icon=io.github.zuraffpl.Sesyjka
+Terminal=false
+Categories=Game;Utility;
+Keywords=RPG;tabletop;collection;sessions;players;books;
+Keywords[pl]=RPG;sesje;gracze;podręczniki;kolekcja;
+StartupNotify=true
+StartupWMClass=io.github.zuraffpl.Sesyjka

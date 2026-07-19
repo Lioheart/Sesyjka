@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright 2026 ZuraffPL and Sesyjka contributors -->
+<component type="desktop-application">
+  <id>io.github.zuraffpl.Sesyjka</id>
+  <name>Sesyjka</name>
+  <summary>Manage tabletop RPG collections and sessions</summary>
+  <summary xml:lang="pl">Zarządzaj kolekcją i sesjami RPG</summary>
+  <developer id="io.github.zuraffpl">
+    <name>ZuraffPL and Sesyjka contributors</name>
+  </developer>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>CC-BY-4.0</project_license>
+  <description>
+    <p>Organize tabletop role-playing game systems, books, supplements, sessions, players and publishers in one native GTK application.</p>
+    <p>Browse hierarchical collections with sorting and per-column filters, record session participants and notes, and inspect quantity charts that update after data changes.</p>
+    <p>Data is stored locally in four compatible SQLite databases. Backups, ZIP and folder transfer, Excel export and a read-only guest mode are included.</p>
+    <p>The current user interface is available in Polish.</p>
+    <p xml:lang="pl">Porządkuj systemy gier fabularnych, podręczniki, suplementy, sesje, graczy i wydawców w jednej natywnej aplikacji GTK.</p>
+    <p xml:lang="pl">Przeglądaj hierarchiczną kolekcję z sortowaniem i filtrami kolumnowymi, zapisuj uczestników i notatki sesji oraz analizuj automatycznie aktualizowane wykresy ilości.</p>
+    <p xml:lang="pl">Dane są przechowywane lokalnie w czterech zgodnych bazach SQLite. Program obsługuje kopie zapasowe, transfer ZIP i folderów, eksport Excel oraz tryb gościa tylko do odczytu.</p>
+  </description>
+  <launchable type="desktop-id">io.github.zuraffpl.Sesyjka.desktop</launchable>
+  <provides>
+    <binary>sesyjka</binary>
+  </provides>
+  <requires>
+    <control>keyboard</control>
+    <control>pointing</control>
+    <display_length compare="ge">768</display_length>
+  </requires>
+  <branding>
+    <color type="primary" scheme_preference="light">#3584e4</color>
+    <color type="primary" scheme_preference="dark">#1c4f8a</color>
+  </branding>
+  <content_rating type="oars-1.1" />
+  <url type="homepage">https://github.com/ZuraffPL/sesyjka</url>
+  <url type="bugtracker">https://github.com/ZuraffPL/sesyjka/issues</url>
+  <url type="vcs-browser">https://github.com/ZuraffPL/sesyjka</url>
+  <screenshots>
+    <screenshot type="default" xml:lang="pl">
+      <image>https://raw.githubusercontent.com/ZuraffPL/sesyjka/v0.6.4/screenshots/image.png</image>
+      <caption>Przeglądaj systemy RPG i hierarchiczną kolekcję podręczników</caption>
+    </screenshot>
+    <screenshot xml:lang="pl">
+      <image>https://raw.githubusercontent.com/ZuraffPL/sesyjka/v0.6.4/screenshots/image2.png</image>
+      <caption>Edytuj lub usuwaj rekordy z menu kontekstowego</caption>
+    </screenshot>
+    <screenshot xml:lang="pl">
+      <image>https://raw.githubusercontent.com/ZuraffPL/sesyjka/v0.6.4/screenshots/image4.png</image>
+      <caption>Dodawaj systemy gry i przypisuj wydawców</caption>
+    </screenshot>
+    <screenshot xml:lang="pl">
+      <image>https://raw.githubusercontent.com/ZuraffPL/sesyjka/v0.6.4/screenshots/image5.png</image>
+      <caption>Twórz wydawcę bez zamykania aktualnego formularza</caption>
+    </screenshot>
+    <screenshot xml:lang="pl">
+      <image>https://raw.githubusercontent.com/ZuraffPL/sesyjka/v0.6.4/screenshots/image6.png</image>
+      <caption>Zapisuj sesje z systemami, graczami, kampaniami i notatkami</caption>
+    </screenshot>
+    <screenshot xml:lang="pl">
+      <image>https://raw.githubusercontent.com/ZuraffPL/sesyjka/v0.6.4/screenshots/image7.png</image>
+      <caption>Zarządzaj katalogiem graczy i tagami grup</caption>
+    </screenshot>
+    <screenshot xml:lang="pl">
+      <image>https://raw.githubusercontent.com/ZuraffPL/sesyjka/v0.6.4/screenshots/image8.png</image>
+      <caption>Zarządzaj danymi wydawców i ich stronami internetowymi</caption>
+    </screenshot>
+    <screenshot xml:lang="pl">
+      <image>https://raw.githubusercontent.com/ZuraffPL/sesyjka/v0.6.4/screenshots/image9.png</image>
+      <caption>Analizuj statystyki kolekcji i sesji w jasnym motywie</caption>
+    </screenshot>
+    <screenshot xml:lang="pl">
+      <image>https://raw.githubusercontent.com/ZuraffPL/sesyjka/v0.6.4/screenshots/image10.png</image>
+      <caption>Korzystaj z pełnego interfejsu w ciemnym motywie Adwaita</caption>
+    </screenshot>
+    <screenshot xml:lang="pl">
+      <image>https://raw.githubusercontent.com/ZuraffPL/sesyjka/v0.6.4/screenshots/image11.png</image>
+      <caption>Eksportuj i importuj bazy oraz przeglądaj je w trybie gościa</caption>
+    </screenshot>
+  </screenshots>
+  <releases>
+    <release version="0.6.4" date="2026-07-19">
+      <description>
+        <p>Separated local execution from system installation, added a complete system uninstaller and bundled the full screenshot set.</p>
+        <p>Database transfer now includes folder export and import validation. Referential checks, player group selection, help and release history were also expanded.</p>
+        <p xml:lang="pl">Rozdzielono uruchamianie lokalne od instalacji systemowej, dodano kompletny deinstalator i pełny zestaw zrzutów ekranu.</p>
+        <p xml:lang="pl">Transfer baz obejmuje teraz eksport do folderu i walidację importu. Rozszerzono także kontrolę integralności, wybór grup graczy, pomoc i historię zmian.</p>
+      </description>
+    </release>
+    <release version="0.6.3" date="2026-07-19">
+      <description>
+        <p>Added Flatpak and Flathub packaging, sandbox-compatible file access and complete desktop metadata.</p>
+        <p xml:lang="pl">Dodano pakiet Flatpak i pliki zgłoszeniowe Flathub, dostęp do plików zgodny z piaskownicą oraz kompletne metadane pulpitu.</p>
+      </description>
+    </release>
+    <release version="0.6.2" date="2026-07-19">
+      <description>
+        <p>Added a statistics separator, context menu icons and improved Wayland icon integration.</p>
+        <p xml:lang="pl">Dodano separator statystyk, ikony menu kontekstowego i poprawiono integrację ikony w Waylandzie.</p>
+      </description>
+    </release>
+  </releases>
+</component>

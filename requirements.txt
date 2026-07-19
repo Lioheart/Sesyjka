@@ -1,0 +1,2 @@
+# Zależności systemowe: PyGObject, GTK4 i Libadwaita
+openpyxl>=3.1
