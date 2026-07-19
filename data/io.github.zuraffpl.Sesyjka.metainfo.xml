@@ -38,47 +38,53 @@
   <url type="vcs-browser">https://github.com/Lioheart/Sesyjka</url>
   <screenshots>
     <screenshot type="default" xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.2/screenshots/image.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.3/screenshots/image.png</image>
       <caption>Przeglądaj systemy RPG i hierarchiczną kolekcję podręczników</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.2/screenshots/image2.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.3/screenshots/image2.png</image>
       <caption>Edytuj lub usuwaj rekordy z menu kontekstowego</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.2/screenshots/image4.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.3/screenshots/image4.png</image>
       <caption>Dodawaj systemy gry i przypisuj wydawców</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.2/screenshots/image5.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.3/screenshots/image5.png</image>
       <caption>Twórz wydawcę bez zamykania aktualnego formularza</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.2/screenshots/image6.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.3/screenshots/image6.png</image>
       <caption>Zapisuj sesje z systemami, graczami, kampaniami i notatkami</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.2/screenshots/image7.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.3/screenshots/image7.png</image>
       <caption>Zarządzaj katalogiem graczy i tagami grup</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.2/screenshots/image8.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.3/screenshots/image8.png</image>
       <caption>Zarządzaj danymi wydawców i ich stronami internetowymi</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.2/screenshots/image9.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.3/screenshots/image9.png</image>
       <caption>Analizuj statystyki kolekcji i sesji w jasnym motywie</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.2/screenshots/image10.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.3/screenshots/image10.png</image>
       <caption>Korzystaj z pełnego interfejsu w ciemnym motywie Adwaita</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.2/screenshots/image11.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.8.3/screenshots/image11.png</image>
       <caption>Eksportuj i importuj bazy oraz przeglądaj je w trybie gościa</caption>
     </screenshot>
   </screenshots>
   <releases>
+    <release version="0.8.3" date="2026-07-19">
+      <description>
+        <p>Row colors now target complete GTK row widgets, supplement subgroups use the pipe separator, language uses a fixed choice list and ISBN validation warns without blocking saves.</p>
+        <p xml:lang="pl">Kolory obejmują rzeczywiste całe wiersze GTK, podgrupy suplementów używają separatora |, język wybiera się z listy, a walidacja ISBN ostrzega bez blokowania zapisu.</p>
+      </description>
+    </release>
     <release version="0.8.2" date="2026-07-19">
       <description>
         <p>Collection-status colors now fill complete rows, data tables use alternating stripes, supplements support multiple subgroup classifications and the purchase currency field provides common-code guidance.</p>

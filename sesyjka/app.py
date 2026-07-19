@@ -61,12 +61,19 @@ BASE_CSS = """
 .table-cell {
   padding: 6px 8px;
   border-radius: 0;
+  background: none;
 }
-.table-cell.table-row-even {
-  background-color: transparent;
+.data-table > listview > row {
+  background-color: @view_bg_color;
 }
-.table-cell.table-row-odd {
-  background-color: alpha(@window_fg_color, 0.045);
+.data-table > listview > row > cell {
+  background: transparent;
+}
+.data-table > listview > row:nth-child(even) {
+  background-color: shade(@view_bg_color, 0.96);
+}
+.data-table > listview > row:selected {
+  box-shadow: inset 0 0 0 2px @accent_color;
 }
 .stat-card {
   min-width: 130px;
@@ -123,47 +130,35 @@ BASE_CSS = """
   color: #c01c28;
 }
 
-.table-cell.status-collection-owned {
+.data-table > listview > row.status-collection-owned {
   background-color: alpha(@success_color, 0.18);
 }
-.table-cell.status-collection-owned.table-row-odd {
-  background-color: alpha(@success_color, 0.25);
-}
-.table-cell.status-collection-for-sale {
+.data-table > listview > row.status-collection-for-sale {
   background-color: alpha(@warning_color, 0.20);
 }
-.table-cell.status-collection-for-sale.table-row-odd {
-  background-color: alpha(@warning_color, 0.28);
-}
-.table-cell.status-collection-sold {
+.data-table > listview > row.status-collection-sold {
   background-color: alpha(@error_color, 0.12);
 }
-.table-cell.status-collection-sold.table-row-odd {
-  background-color: alpha(@error_color, 0.18);
+.data-table > listview > row.status-collection-not-owned {
+  background-color: @view_bg_color;
 }
-.table-cell.status-collection-not-owned {
-  background-color: alpha(@window_fg_color, 0.025);
-}
-.table-cell.status-collection-not-owned.table-row-odd {
-  background-color: alpha(@window_fg_color, 0.075);
-}
-.table-cell.status-collection-wishlist {
+.data-table > listview > row.status-collection-wishlist {
   background-color: alpha(@accent_color, 0.14);
 }
-.table-cell.status-collection-wishlist.table-row-odd {
-  background-color: alpha(@accent_color, 0.21);
-}
-.table-cell.status-collection-loaned {
+.data-table > listview > row.status-collection-loaned {
   background-color: rgba(145, 65, 172, 0.14);
 }
-.table-cell.status-collection-loaned.table-row-odd {
-  background-color: rgba(145, 65, 172, 0.21);
-}
-.table-cell.status-collection-mixed {
+.data-table > listview > row.status-collection-mixed {
   background-color: alpha(@accent_color, 0.08);
 }
-.table-cell.status-collection-mixed.table-row-odd {
-  background-color: alpha(@accent_color, 0.14);
+.data-table > listview > row.status-collection-owned:nth-child(even),
+.data-table > listview > row.status-collection-for-sale:nth-child(even),
+.data-table > listview > row.status-collection-sold:nth-child(even),
+.data-table > listview > row.status-collection-not-owned:nth-child(even),
+.data-table > listview > row.status-collection-wishlist:nth-child(even),
+.data-table > listview > row.status-collection-loaned:nth-child(even),
+.data-table > listview > row.status-collection-mixed:nth-child(even) {
+  background-image: linear-gradient(rgba(0, 0, 0, 0.055), rgba(0, 0, 0, 0.055));
 }
 .supplement-type-list {
   padding: 10px 12px;
@@ -207,7 +202,7 @@ class SesyjkaWindow(Adw.ApplicationWindow):
             title.add_css_class("title")
         self.header.set_title_widget(title)
 
-        transfer_button = Gtk.Button.new_from_icon_name("drive-harddisk-symbolic")
+        transfer_button = Gtk.Button.new_from_icon_name("database")
         transfer_button.set_tooltip_text("Bazy danych")
         transfer_button.connect("clicked", lambda _button: self.show_transfer())
         self.header.pack_start(transfer_button)
@@ -618,6 +613,9 @@ class SesyjkaWindow(Adw.ApplicationWindow):
     def show_history(self) -> None:
         dialog = ModalWindow(self, "Historia zmian", width=720, height=620)
         history_text = (
+            "0.8.3\n"
+            "Kolory statusu są przypisywane wewnętrznym widgetom całych wierszy, a pasy używają selektorów CSS GTK. "
+            "Podgrupy suplementów są zapisywane separatorem |, język wybiera się z listy, a niepoprawny ISBN wyświetla ostrzeżenie bez blokowania zapisu.\n\n"
             "0.8.2\n"
             "Kolory statusu kolekcji obejmują całe wiersze, a wszystkie tabele mają naprzemienne pasy. "
             "Suplementy obsługują wielokrotny wybór podgrup, a pole waluty zakupu podpowiada popularne kody.\n\n"

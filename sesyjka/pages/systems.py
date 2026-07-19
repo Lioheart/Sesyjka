@@ -12,6 +12,7 @@ from gi.repository import Gtk
 
 from ..dialogs import ModalWindow, confirm, info, make_entry
 from ..repository import Repository
+from ..validation import LANGUAGE_CHOICES, is_valid_isbn, normalize_language_choice
 from ..widgets import Choice, ChoiceDropDown, FormGrid, TextDropDown
 from .base import CrudPage
 
@@ -318,7 +319,10 @@ class SystemsPage(CrudPage):
             dialog,
             record.get("wydawca_id") if record else None,
         )
-        language = make_entry(record.get("jezyk") if record else "", "Język")
+        language = TextDropDown(
+            LANGUAGE_CHOICES,
+            normalize_language_choice(record.get("jezyk") if record else "PL"),
+        )
         notes = Gtk.TextView()
         notes.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
         notes.set_size_request(-1, 100)
@@ -338,7 +342,7 @@ class SystemsPage(CrudPage):
                     {
                         "nazwa": name.get_text(),
                         "wydawca_id": publisher.identifier(),
-                        "jezyk": language.get_text(),
+                        "jezyk": language.text(),
                         "notatki": text,
                     },
                     int(record["game_system_id"]) if record else None,
@@ -394,7 +398,10 @@ class SystemsPage(CrudPage):
             dialog,
             record.get("wydawca_id") if record else None,
         )
-        language = make_entry(record.get("jezyk") if record else "", "Język")
+        language = TextDropDown(
+            LANGUAGE_CHOICES,
+            normalize_language_choice(record.get("jezyk") if record else "PL"),
+        )
 
         raw_supplement_types = str(record.get("typ_suplementu") or "") if record else ""
         existing_supplement_types = [
@@ -533,53 +540,58 @@ class SystemsPage(CrudPage):
             entry.connect("changed", update_total)
         update_visibility()
 
-        def save() -> None:
-            try:
-                parent_id = parent_book.identifier()
-                selected_game_system_id = game_system.identifier()
-                if parent_id is not None:
-                    parent = main_book_map.get(parent_id)
-                    if parent and parent.get("system_gry_id") is not None:
-                        selected_game_system_id = int(parent["system_gry_id"])
-                if selected_game_system_id is None:
-                    raise ValueError("Przypisz pozycję do systemu RPG.")
+        def build_payload() -> dict[str, Any]:
+            parent_id = parent_book.identifier()
+            selected_game_system_id = game_system.identifier()
+            if parent_id is not None:
+                parent = main_book_map.get(parent_id)
+                if parent and parent.get("system_gry_id") is not None:
+                    selected_game_system_id = int(parent["system_gry_id"])
+            if selected_game_system_id is None:
+                raise ValueError("Przypisz pozycję do systemu RPG.")
 
-                vtt_name = vtt_platform.get_text().strip() if vtt_enabled.get_active() else ""
-                if vtt_enabled.get_active() and not vtt_name:
-                    raise ValueError("Wpisz nazwę platformy VTT.")
-                selling = collection_status.text() in {"Na sprzedaż", "Sprzedane"}
-                selected_supplement_types = [
-                    label for label, check in supplement_checks if check.get_active()
-                ]
+            vtt_name = vtt_platform.get_text().strip() if vtt_enabled.get_active() else ""
+            if vtt_enabled.get_active() and not vtt_name:
+                raise ValueError("Wpisz nazwę platformy VTT.")
+            selling = collection_status.text() in {"Na sprzedaż", "Sprzedane"}
+            selected_supplement_types = [
+                label for label, check in supplement_checks if check.get_active()
+            ]
+            return {
+                "nazwa": name.get_text(),
+                "typ": item_type.text(),
+                "system_gry_id": selected_game_system_id,
+                "system_glowny_id": parent_id,
+                "wydawca_id": publisher.identifier(),
+                "jezyk": language.text(),
+                "typ_suplementu": (
+                    " | ".join(selected_supplement_types)
+                    if item_type.text() == "Suplement"
+                    else ""
+                ),
+                "status_gra": game_status.text(),
+                "status_kolekcja": collection_status.text(),
+                "fizyczny": physical.get_active(),
+                "pdf": pdf.get_active(),
+                "vtt": vtt_name,
+                "cena_fiz": price_physical.get_text() if physical.get_active() else None,
+                "cena_pdf": price_pdf.get_text() if pdf.get_active() else None,
+                "cena_vtt": price_vtt.get_text() if vtt_enabled.get_active() else None,
+                "cena_zakupu": purchase_price.get_text(),
+                "waluta_zakupu": currency.get_text(),
+                "cena_sprzedazy": sale_price.get_text() if selling else None,
+                "waluta_sprzedazy": sale_currency.get_text() if selling else None,
+                "rok_wydania": year.get_text(),
+                "isbn": isbn.get_text(),
+                "system_glowny_nazwa_custom": (
+                    record.get("system_glowny_nazwa_custom") if record else None
+                ),
+            }
+
+        def persist(payload: dict[str, Any]) -> None:
+            try:
                 self.repository.save_system(
-                    {
-                        "nazwa": name.get_text(),
-                        "typ": item_type.text(),
-                        "system_gry_id": selected_game_system_id,
-                        "system_glowny_id": parent_id,
-                        "wydawca_id": publisher.identifier(),
-                        "jezyk": language.get_text(),
-                        "typ_suplementu": (
-                            "; ".join(selected_supplement_types)
-                            if item_type.text() == "Suplement"
-                            else ""
-                        ),
-                        "status_gra": game_status.text(),
-                        "status_kolekcja": collection_status.text(),
-                        "fizyczny": physical.get_active(),
-                        "pdf": pdf.get_active(),
-                        "vtt": vtt_name,
-                        "cena_fiz": price_physical.get_text() if physical.get_active() else None,
-                        "cena_pdf": price_pdf.get_text() if pdf.get_active() else None,
-                        "cena_vtt": price_vtt.get_text() if vtt_enabled.get_active() else None,
-                        "cena_zakupu": purchase_price.get_text(),
-                        "waluta_zakupu": currency.get_text(),
-                        "cena_sprzedazy": sale_price.get_text() if selling else None,
-                        "waluta_sprzedazy": sale_currency.get_text() if selling else None,
-                        "rok_wydania": year.get_text(),
-                        "isbn": isbn.get_text(),
-                        "system_glowny_nazwa_custom": record.get("system_glowny_nazwa_custom") if record else None,
-                    },
+                    payload,
                     int(record["id"]) if record else None,
                 )
                 dialog.close()
@@ -587,6 +599,27 @@ class SystemsPage(CrudPage):
                 self.notify_data_changed()
             except Exception as exc:
                 info(dialog, "Błąd zapisu", str(exc), error=True)
+
+        def save() -> None:
+            try:
+                payload = build_payload()
+            except Exception as exc:
+                info(dialog, "Błąd zapisu", str(exc), error=True)
+                return
+
+            isbn_value = str(payload.get("isbn") or "").strip()
+            if isbn_value and not is_valid_isbn(isbn_value):
+                confirm(
+                    dialog,
+                    "Nieprawidłowy numer ISBN",
+                    "Numer ISBN ma nieprawidłowy format lub sumę kontrolną. "
+                    "Możesz zapisać pozycję mimo ostrzeżenia.",
+                    lambda: persist(payload),
+                    confirm_label="Zapisz mimo to",
+                    destructive=False,
+                )
+                return
+            persist(payload)
 
         dialog.add_buttons(save)
         dialog.present()

@@ -6,7 +6,7 @@ from typing import Any
 import gi
 
 gi.require_version("Gtk", "4.0")
-from gi.repository import Gdk, Gio, GObject, Gtk, Pango
+from gi.repository import Gdk, Gio, GLib, GObject, Gtk, Pango
 
 ROW_STYLE_CLASSES = (
     "status-collection-owned",
@@ -17,8 +17,6 @@ ROW_STYLE_CLASSES = (
     "status-collection-loaned",
     "status-collection-mixed",
 )
-ROW_STRIPE_CLASSES = ("table-row-even", "table-row-odd")
-
 
 class TableRow(GObject.Object):
     def __init__(self, record: dict[str, Any], values: Sequence[str]) -> None:
@@ -268,8 +266,12 @@ class DataTable(Gtk.Box):
         cell.add_controller(gesture)
         item.set_child(cell)
 
-    @staticmethod
-    def _bind_cell(_factory: Gtk.SignalListItemFactory, item: Gtk.ListItem, index: int) -> None:
+    def _bind_cell(
+        self,
+        _factory: Gtk.SignalListItemFactory,
+        item: Gtk.ListItem,
+        index: int,
+    ) -> None:
         row = item.get_item()
         cell = item.get_child()
         label = cell.get_first_child() if isinstance(cell, Gtk.Box) else None
@@ -280,13 +282,34 @@ class DataTable(Gtk.Box):
             else:
                 label.remove_css_class("heading")
 
-            for css_class in (*ROW_STYLE_CLASSES, *ROW_STRIPE_CLASSES):
-                cell.remove_css_class(css_class)
-            position = int(item.get_position())
-            cell.add_css_class("table-row-odd" if position % 2 else "table-row-even")
-            row_css_class = str(row.record.get("_row_css_class") or "")
-            if row_css_class in ROW_STYLE_CLASSES:
-                cell.add_css_class(row_css_class)
+            # Gtk.ColumnView tworzy jeden wewnętrzny widget CSS ``row`` dla
+            # całego rekordu. Kolor jest przypisywany właśnie temu widgetowi,
+            # a nie kontenerom poszczególnych komórek. Dzięki temu tło jest
+            # ciągłe na pełnej szerokości wiersza, również pod separatorami.
+            if not self._style_row_from_cell(cell, row.record):
+                GLib.idle_add(self._style_row_after_bind, item, row)
+
+    def _style_row_after_bind(self, item: Gtk.ListItem, expected_row: TableRow) -> bool:
+        if item.get_item() is not expected_row:
+            return GLib.SOURCE_REMOVE
+        child = item.get_child()
+        if isinstance(child, Gtk.Widget):
+            self._style_row_from_cell(child, expected_row.record)
+        return GLib.SOURCE_REMOVE
+
+    @staticmethod
+    def _style_row_from_cell(cell: Gtk.Widget, record: dict[str, Any]) -> bool:
+        widget: Gtk.Widget | None = cell
+        while widget is not None:
+            if widget.get_css_name() == "row":
+                for css_class in ROW_STYLE_CLASSES:
+                    widget.remove_css_class(css_class)
+                row_css_class = str(record.get("_row_css_class") or "")
+                if row_css_class in ROW_STYLE_CLASSES:
+                    widget.add_css_class(row_css_class)
+                return True
+            widget = widget.get_parent()
+        return False
 
     @staticmethod
     def _compare_rows(left: TableRow, right: TableRow, key: str) -> Gtk.Ordering:

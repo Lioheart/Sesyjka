@@ -216,7 +216,7 @@ class ApplicationSourceTests(unittest.TestCase):
         app = (self.root / "sesyjka" / "app.py").read_text(encoding="utf-8")
         transfer = (self.root / "sesyjka" / "transfer.py").read_text(encoding="utf-8")
         dialogs = (self.root / "sesyjka" / "dialogs.py").read_text(encoding="utf-8")
-        self.assertIn('drive-harddisk-symbolic', app)
+        self.assertIn('Gtk.Button.new_from_icon_name("database")', app)
         self.assertNotIn('Gtk.Button.new_from_icon_name("document-save-symbolic")', app)
         self.assertIn('confirm_label="Zaimportuj"', transfer)
         self.assertIn('destructive=False', transfer)
@@ -241,15 +241,18 @@ class ApplicationSourceTests(unittest.TestCase):
         self.assertIn("export_sessions_csv", repository)
         self.assertIn('"All Day Event"', repository)
 
-    def test_table_backgrounds_fill_cells_and_use_zebra_striping(self) -> None:
+    def test_table_backgrounds_style_real_rows_and_use_zebra_striping(self) -> None:
         widgets = (self.root / "sesyjka" / "widgets.py").read_text(encoding="utf-8")
         app = (self.root / "sesyjka" / "app.py").read_text(encoding="utf-8")
-        self.assertIn('cell.add_css_class("table-cell")', widgets)
-        self.assertIn("ROW_STRIPE_CLASSES", widgets)
-        self.assertIn('item.get_position()', widgets)
-        self.assertIn(".table-cell.table-row-odd", app)
-        self.assertIn(".table-cell.status-collection-owned.table-row-odd", app)
-        self.assertNotIn("label.add_css_class(row_css_class)", widgets)
+        self.assertIn('widget.get_css_name() == "row"', widgets)
+        self.assertIn('widget.add_css_class(row_css_class)', widgets)
+        self.assertNotIn('cell.add_css_class(row_css_class)', widgets)
+        self.assertNotIn("ROW_STRIPE_CLASSES", widgets)
+        self.assertIn(".data-table > listview > row:nth-child(even)", app)
+        self.assertIn(".data-table > listview > row > cell", app)
+        self.assertIn("background: transparent", app)
+        self.assertIn("row.status-collection-owned", app)
+        self.assertNotIn(".table-cell.status-collection-owned", app)
 
     def test_supplements_support_multiple_checkbox_subgroups(self) -> None:
         systems = (self.root / "sesyjka" / "pages" / "systems.py").read_text(encoding="utf-8")
@@ -265,8 +268,17 @@ class ApplicationSourceTests(unittest.TestCase):
             self.assertIn(label, systems)
         self.assertIn("supplement_checks", systems)
         self.assertIn('item_type.text() == "Suplement"', systems)
-        self.assertIn('"; ".join(selected_supplement_types)', systems)
+        self.assertIn('" | ".join(selected_supplement_types)', systems)
         self.assertIn('item_type.casefold() == "suplement"', repository)
+
+    def test_language_choices_and_non_blocking_isbn_warning_are_available(self) -> None:
+        systems = (self.root / "sesyjka" / "pages" / "systems.py").read_text(encoding="utf-8")
+        validation = (self.root / "sesyjka" / "validation.py").read_text(encoding="utf-8")
+        self.assertIn('LANGUAGE_CHOICES', systems)
+        self.assertIn('("PL", "ENG", "DE", "FR", "ES", "IT", "Inny")', validation)
+        self.assertIn('not is_valid_isbn(isbn_value)', systems)
+        self.assertIn('confirm_label="Zapisz mimo to"', systems)
+        self.assertIn('destructive=False', systems)
 
     def test_purchase_currency_has_common_code_hint(self) -> None:
         systems = (self.root / "sesyjka" / "pages" / "systems.py").read_text(encoding="utf-8")

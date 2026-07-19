@@ -266,7 +266,7 @@ class Repository:
                 for part in re.split(r"[;,|\n]+", str(normalized.get("typ_suplementu") or ""))
                 if part.strip()
             ]
-            normalized["typ_suplementu"] = "; ".join(dict.fromkeys(supplement_values))
+            normalized["typ_suplementu"] = " | ".join(dict.fromkeys(supplement_values))
         else:
             normalized["typ_suplementu"] = None
 

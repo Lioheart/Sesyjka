@@ -396,13 +396,13 @@ class RepositoryTests(unittest.TestCase):
                 "nazwa": "Suplement",
                 "typ": "Suplement",
                 "system_gry_id": game_system_id,
-                "typ_suplementu": "Bestiariusz; Moduł; Rozwinięcie zasad",
+                "typ_suplementu": "Bestiariusz | Moduł | Rozwinięcie zasad",
             }
         )
         record = next(item for item in self.repository.systems() if item["id"] == record_id)
         self.assertEqual(
             record["typ_suplementu"],
-            "Bestiariusz; Moduł; Rozwinięcie zasad",
+            "Bestiariusz | Moduł | Rozwinięcie zasad",
         )
         with self.databases.connect("systemy_rpg.db") as connection:
             columns = {row[1] for row in connection.execute("PRAGMA table_info(systemy_rpg)")}

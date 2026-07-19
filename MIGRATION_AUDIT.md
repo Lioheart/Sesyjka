@@ -28,11 +28,11 @@ Każde połączenie ustawia `sqlite3.Row` i `PRAGMA foreign_keys = ON`. Relacje 
 
 ## Tabele i hierarchia
 
-Widok systemów grupuje rekordy jako system gry, podręcznik główny i pozycje podrzędne. Sortowanie odbywa się wewnątrz gałęzi. Tabele płaskie sortują po kliknięciu nagłówka. Każda tabela CRUD ma filtr globalny, filtry poszczególnych kolumn, zmianę szerokości kolumn, dwuklik i menu prawego przycisku.
+Widok systemów grupuje rekordy jako system gry, podręcznik główny i pozycje podrzędne. Sortowanie odbywa się wewnątrz gałęzi. Tabele płaskie sortują po kliknięciu nagłówka. Każda tabela CRUD ma filtr globalny, filtry poszczególnych kolumn, zmianę szerokości kolumn, dwuklik i menu prawego przycisku. Kolory statusów są przypisywane do wewnętrznego widgetu CSS `row` całego rekordu. Naprzemienne pasy korzystają z selektora `row:nth-child(even)`, a nie z tła kontenerów komórek.
 
 ## Formularz pozycji RPG
 
-Pola podstawowe są stale widoczne. Pola cen fizycznej, PDF i VTT pojawiają się tylko po zaznaczeniu odpowiedniego formatu. Cena łączna jest wyliczana automatycznie. Cena i waluta sprzedaży są pokazywane tylko dla statusu kolekcji `Na sprzedaż` lub `Sprzedane`.
+Pola podstawowe są stale widoczne. Pola cen fizycznej, PDF i VTT pojawiają się tylko po zaznaczeniu odpowiedniego formatu. Cena łączna jest wyliczana automatycznie. Cena i waluta sprzedaży są pokazywane tylko dla statusu kolekcji `Na sprzedaż` lub `Sprzedane`. Podgrupy suplementu są wybierane wielokrotnie i zapisywane separatorem ` | `. Język pochodzi ze stałej listy. ISBN-10 i ISBN-13 są sprawdzane, ale niepoprawna wartość może zostać zapisana po potwierdzeniu ostrzeżenia.
 
 ## Sesje
 
