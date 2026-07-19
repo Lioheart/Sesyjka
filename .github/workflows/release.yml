@@ -1,0 +1,168 @@
+name: Build release packages
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Validate release version
+        id: version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            echo "Tag wydania musi mieć postać vX.Y.Z, otrzymano: $RELEASE_TAG" >&2
+            exit 1
+          fi
+          VERSION="${BASH_REMATCH[1]}"
+          PROJECT_VERSION="$(python3 - <<'PY'
+          from pathlib import Path
+          import re
+          text = Path('pyproject.toml').read_text(encoding='utf-8')
+          match = re.search(r'^version\s*=\s*"([0-9]+\.[0-9]+\.[0-9]+)"\s*$', text, re.MULTILINE)
+          if not match:
+              raise SystemExit('Brak wersji w pyproject.toml')
+          print(match.group(1))
+          PY
+          )"
+          APP_VERSION="$(python3 - <<'PY'
+          from sesyjka import APP_VERSION
+          print(APP_VERSION)
+          PY
+          )"
+          if [[ "$VERSION" != "$PROJECT_VERSION" || "$VERSION" != "$APP_VERSION" ]]; then
+            echo "Niezgodne wersje: tag=$VERSION pyproject=$PROJECT_VERSION app=$APP_VERSION" >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Compile sources
+        run: python3 -m compileall -q sesyjka tests
+
+      - name: Run tests
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Validate shell scripts
+        run: bash -n run.sh install-linux.sh uninstall-linux.sh packaging/*.sh
+
+  generic:
+    needs: validate
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.validate.outputs.tag }}
+
+      - name: Build generic installers
+        run: ./packaging/build-generic.sh "${{ needs.validate.outputs.version }}" dist
+
+      - name: Upload generic installers
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-generic
+          path: dist/*
+          if-no-files-found: error
+
+  deb:
+    needs: validate
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.validate.outputs.tag }}
+
+      - name: Install DEB build tools
+        run: sudo apt-get update && sudo apt-get install -y dpkg-dev
+
+      - name: Build Ubuntu DEB
+        run: ./packaging/build-deb.sh "${{ needs.validate.outputs.version }}" dist
+
+      - name: Inspect DEB metadata
+        run: dpkg-deb --info "dist/sesyjka_${{ needs.validate.outputs.version }}_all.deb"
+
+      - name: Upload DEB
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-deb
+          path: dist/*.deb
+          if-no-files-found: error
+
+  rpm:
+    needs: validate
+    runs-on: ubuntu-24.04
+    container:
+      image: fedora:latest
+    steps:
+      - name: Install build tools
+        run: dnf install -y git rpm-build tar gzip findutils python3
+
+      - name: Checkout release tag
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.validate.outputs.tag }}
+
+      - name: Build Fedora RPM
+        run: ./packaging/build-rpm.sh "${{ needs.validate.outputs.version }}" dist
+
+      - name: Inspect RPM metadata
+        run: rpm -qip dist/*.rpm
+
+      - name: Upload RPM
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-rpm
+          path: dist/*.rpm
+          if-no-files-found: error
+
+  publish:
+    needs: [validate, generic, deb, rpm]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download built packages
+        uses: actions/download-artifact@v8
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+
+      - name: Generate SHA-256 checksums
+        run: |
+          set -euo pipefail
+          cd dist
+          find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%f\0' \
+            | sort -z \
+            | xargs -0 sha256sum > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Attach packages to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.validate.outputs.tag }}
+        run: gh release upload "$RELEASE_TAG" dist/* --clobber --repo "$GITHUB_REPOSITORY"
