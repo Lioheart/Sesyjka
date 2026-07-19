@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import threading
+import time
 from pathlib import Path
 
 import gi
@@ -9,13 +11,21 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
-from . import APP_ID, APP_NAME, APP_VERSION
+from . import APP_ID, APP_NAME, APP_VERSION, UPDATE_REPOSITORY
 from .config import load_settings, migrate_legacy_databases, save_settings
 from .database_manager import DatabaseManager
 from .dialogs import ModalWindow, info
 from .pages import PlayersPage, PublishersPage, SessionsPage, StatisticsPage, SystemsPage
 from .repository import Repository
 from .transfer import TransferWindow
+from .updater import (
+    LatestRelease,
+    detect_install_channel,
+    download_and_install,
+    fetch_latest_release,
+    is_newer_version,
+    release_page_url,
+)
 from .widgets import set_css
 
 LOG = logging.getLogger(__name__)
@@ -120,6 +130,7 @@ class SesyjkaWindow(Adw.ApplicationWindow):
         self.repository = Repository(databases)
         self._font_provider = None
         self.style_manager = Adw.StyleManager.get_default()
+        self._update_check_in_progress = False
         self.connect("close-request", self.on_close_request)
         self.set_icon_name(APP_ID)
 
@@ -168,6 +179,11 @@ class SesyjkaWindow(Adw.ApplicationWindow):
         theme_box.append(self.theme_icon)
         theme_box.append(self.dark_switch)
         self.header.pack_end(theme_box)
+
+        self.update_button = Gtk.Button.new_from_icon_name("software-update-available-symbolic")
+        self.update_button.set_tooltip_text("Sprawdź aktualizacje")
+        self.update_button.connect("clicked", lambda _button: self.check_for_updates(manual=True))
+        self.header.pack_end(self.update_button)
 
         about_button = Gtk.Button.new_from_icon_name("help-about-symbolic")
         about_button.set_tooltip_text("O programie")
@@ -244,6 +260,7 @@ class SesyjkaWindow(Adw.ApplicationWindow):
         self.apply_font_scale(float(self.settings_data.get("font_scale", 1.0)))
         self.update_guest_state()
         self.refresh_all()
+        GLib.timeout_add_seconds(4, self._startup_update_check)
 
     def apply_dark_mode(self, enabled: bool) -> None:
         # Przełącznik ma dwa jednoznaczne stany. Wyłączony zawsze wymusza jasne
@@ -299,6 +316,186 @@ class SesyjkaWindow(Adw.ApplicationWindow):
             page.set_read_only(guest)
         self.refresh_all()
 
+    def _current_settings(self) -> dict[str, object]:
+        settings: dict[str, object] = dict(self.settings_data)
+        settings.update(
+            {
+                "dark_mode": self.dark_switch.get_active(),
+                "font_scale": round(float(self.font_scale.get_value()), 1),
+                "width": max(self.get_default_size()[0], 900),
+                "height": max(self.get_default_size()[1], 650),
+                "maximized": self.is_maximized(),
+            }
+        )
+        return settings
+
+    def _save_current_settings(self) -> None:
+        self.settings_data = self._current_settings()
+        try:
+            save_settings(self.settings_data)
+        except OSError:
+            LOG.exception("Nie udało się zapisać ustawień")
+
+    def _startup_update_check(self) -> bool:
+        if not bool(self.settings_data.get("check_updates", True)):
+            return False
+        last_check = int(self.settings_data.get("last_update_check", 0) or 0)
+        if int(time.time()) - last_check < 6 * 60 * 60:
+            return False
+        self.check_for_updates(manual=False)
+        return False
+
+    def check_for_updates(self, manual: bool = False) -> None:
+        if self._update_check_in_progress:
+            if manual:
+                info(self, "Aktualizacje", "Sprawdzanie aktualizacji już trwa.")
+            return
+        self._update_check_in_progress = True
+        self.update_button.set_sensitive(False)
+
+        def worker() -> None:
+            release: LatestRelease | None = None
+            error: Exception | None = None
+            try:
+                release = fetch_latest_release()
+            except Exception as exc:  # odpowiedź sieciowa jest raportowana w wątku GTK
+                error = exc
+            GLib.idle_add(self._finish_update_check, release, error, manual)
+
+        threading.Thread(target=worker, name="sesyjka-update-check", daemon=True).start()
+
+    def _finish_update_check(
+        self,
+        release: LatestRelease | None,
+        error: Exception | None,
+        manual: bool,
+    ) -> bool:
+        self._update_check_in_progress = False
+        self.update_button.set_sensitive(True)
+        if error is not None:
+            LOG.warning("Sprawdzanie aktualizacji nie powiodło się: %s", error)
+            if manual:
+                info(self, "Błąd aktualizacji", str(error), error=True)
+            return False
+
+        self.settings_data["last_update_check"] = int(time.time())
+        self._save_current_settings()
+        if release is None:
+            return False
+        try:
+            newer = is_newer_version(release.version, APP_VERSION)
+        except ValueError as exc:
+            LOG.warning("Nieprawidłowy numer wydania: %s", exc)
+            if manual:
+                info(self, "Błąd aktualizacji", str(exc), error=True)
+            return False
+        if newer:
+            self.show_update_dialog(release)
+        elif manual:
+            info(self, "Aktualizacje", f"Używasz najnowszej wersji {APP_VERSION}.")
+        return False
+
+    def _open_release_page(self, url: str | None = None) -> None:
+        try:
+            Gio.AppInfo.launch_default_for_uri(url or release_page_url(), None)
+        except GLib.Error as exc:
+            info(self, "Nie można otworzyć strony", str(exc), error=True)
+
+    def show_update_dialog(self, release: LatestRelease) -> None:
+        channel = detect_install_channel()
+        dialog = ModalWindow(self, "Dostępna aktualizacja", width=620, height=430)
+        heading = Gtk.Label(label=f"Sesyjka {release.version}")
+        heading.add_css_class("title-1")
+        heading.set_halign(Gtk.Align.START)
+        description = Gtk.Label(
+            label=(
+                f"Zainstalowana wersja: {APP_VERSION}\n"
+                f"Kanał instalacji: {channel}\n\n"
+                + (release.body[:1800] or "Wydanie nie zawiera opisu zmian.")
+            ),
+            wrap=True,
+            selectable=True,
+            xalign=0.0,
+            yalign=0.0,
+        )
+        description.set_vexpand(True)
+        dialog.root_box.append(heading)
+        dialog.add_scrolled_content(description)
+
+        buttons = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        buttons.set_halign(Gtk.Align.END)
+        later = Gtk.Button(label="Później")
+        later.connect("clicked", lambda _button: dialog.close())
+        page = Gtk.Button(label="Strona wydania")
+        page.connect("clicked", lambda _button: self._open_release_page(release.html_url))
+        buttons.append(page)
+        buttons.append(later)
+        if channel != "local":
+            update = Gtk.Button(label="Aktualizuj")
+            update.add_css_class("suggested-action")
+            update.connect(
+                "clicked",
+                lambda _button: self._install_release(release, channel, dialog),
+            )
+            buttons.append(update)
+            dialog.set_default_widget(update)
+        dialog.root_box.append(buttons)
+        dialog.present()
+
+    def _install_release(
+        self,
+        release: LatestRelease,
+        channel: str,
+        source_dialog: Gtk.Window,
+    ) -> None:
+        source_dialog.close()
+        progress = ModalWindow(self, "Aktualizacja", width=500, height=250)
+        spinner = Gtk.Spinner()
+        spinner.start()
+        spinner.set_halign(Gtk.Align.CENTER)
+        label = Gtk.Label(
+            label=(
+                "Pobieranie i weryfikowanie pakietu. System może poprosić "
+                "o hasło administratora przez Polkit."
+            ),
+            wrap=True,
+            xalign=0.0,
+        )
+        progress.root_box.append(spinner)
+        progress.root_box.append(label)
+        progress.present()
+
+        def worker() -> None:
+            error: Exception | None = None
+            try:
+                download_and_install(release, channel)
+            except Exception as exc:
+                error = exc
+            GLib.idle_add(self._finish_install_update, progress, release, error)
+
+        threading.Thread(target=worker, name="sesyjka-update-install", daemon=True).start()
+
+    def _finish_install_update(
+        self,
+        progress: Gtk.Window,
+        release: LatestRelease,
+        error: Exception | None,
+    ) -> bool:
+        progress.close()
+        if error is not None:
+            LOG.error(
+                "Aktualizacja nie została zainstalowana",
+                exc_info=(type(error), error, error.__traceback__),
+            )
+            info(self, "Aktualizacja nieudana", str(error), error=True)
+            return False
+        info(
+            self,
+            "Aktualizacja zainstalowana",
+            f"Zainstalowano wersję {release.version}. Zamknij i uruchom ponownie Sesyjkę.",
+        )
+        return False
+
     def show_transfer(self) -> None:
         dialog = TransferWindow(
             self,
@@ -331,6 +528,10 @@ class SesyjkaWindow(Adw.ApplicationWindow):
             "SKRÓTY\n"
             "Ctrl+N dodaje rekord w aktywnej zakładce. Ctrl+R odświeża dane. Ctrl+Q zamyka program. "
             "Dwuklik edytuje rekord, a prawy przycisk myszy otwiera menu kontekstowe.\n\n"
+            "AKTUALIZACJE\n"
+            "Program sprawdza najnowsze wydanie GitHub podczas uruchamiania, nie częściej niż co 6 godzin. "
+            "Przycisk aktualizacji w nagłówku uruchamia kontrolę ręczną. Pakiety DEB, RPM i instalacja ogólna "
+            "mogą zostać zaktualizowane po potwierdzeniu uprawnień administratora.\n\n"
             "DANE\n"
             f"Bazy użytkownika: {self.databases.own_root}"
         )
@@ -346,18 +547,18 @@ class SesyjkaWindow(Adw.ApplicationWindow):
     def show_history(self) -> None:
         dialog = ModalWindow(self, "Historia zmian", width=720, height=620)
         history_text = (
+            "0.7.0\n"
+            "Dodano automatyczne budowanie pakietów DEB, RPM i instalatora ogólnego przy publikowaniu wydania GitHub. "
+            "Aplikacja wykrywa nowe stabilne wydania, weryfikuje sumy SHA-256 i aktualizuje właściwy kanał instalacji przez Polkit. "
+            "Usunięto pliki Flatpak i Flathub.\n\n"
             "0.6.4\n"
             "Rozdzielono uruchamianie lokalne od instalacji systemowej. Dodano pełny instalator do /opt i /usr/local, "
             "systemowy deinstalator, komplet zrzutów ekranu, eksport baz do folderu, walidację importowanych baz, "
             "szybki wybór grup graczy oraz dodatkowe kontrole integralności między bazami.\n\n"
-            "0.6.3\n"
-            "Dodano manifest Flatpak i zestaw zgłoszeniowy Flathub.\n\n"
-            "0.6.2\n"
-            "Dodano separator statystyk, ikony menu kontekstowego i integrację ikony Wayland.\n\n"
-            "0.6.1\n"
-            "Poprawiono popovery Adwaita i dodano natywne wykresy ilości.\n\n"
-            "0.6.0\n"
-            "Dodano hierarchiczne tabele, sortowanie, filtry kolumnowe, menu kontekstowe, walidację sesji i statystyki szczegółowe."
+            "0.6.2-0.6.3\n"
+            "Dodano separator statystyk, ikony menu kontekstowego, integrację ikony Wayland i wcześniejsze pliki pakowania.\n\n"
+            "0.6.0-0.6.1\n"
+            "Dodano hierarchiczne tabele, sortowanie, filtry kolumnowe, menu kontekstowe, walidację sesji, popovery Adwaita i wykresy ilości."
         )
         label = Gtk.Label(label=history_text, wrap=True, selectable=True, xalign=0.0, yalign=0.0)
         label.set_max_width_chars(88)
@@ -369,7 +570,7 @@ class SesyjkaWindow(Adw.ApplicationWindow):
         dialog.present()
 
     def show_about(self) -> None:
-        dialog = ModalWindow(self, "O programie", width=520, height=360)
+        dialog = ModalWindow(self, "O programie", width=560, height=430)
         title = Gtk.Label(label=f"{APP_NAME} {APP_VERSION}")
         title.add_css_class("title-1")
         title.set_halign(Gtk.Align.START)
@@ -382,37 +583,43 @@ class SesyjkaWindow(Adw.ApplicationWindow):
             xalign=0.0,
         )
         details = Gtk.Label(
-            label=f"Identyfikator: {APP_ID}\nKatalog danych: {self.databases.own_root}",
+            label=(
+                f"Identyfikator: {APP_ID}\n"
+                f"Repozytorium: {UPDATE_REPOSITORY}\n"
+                f"Kanał instalacji: {detect_install_channel()}\n"
+                f"Katalog danych: {self.databases.own_root}"
+            ),
             selectable=True,
             xalign=0.0,
         )
+        update_check = Gtk.CheckButton(label="Automatycznie sprawdzaj aktualizacje")
+        update_check.set_active(bool(self.settings_data.get("check_updates", True)))
+
+        def update_preference(button: Gtk.CheckButton) -> None:
+            self.settings_data["check_updates"] = button.get_active()
+            self._save_current_settings()
+
+        update_check.connect("toggled", update_preference)
         buttons = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         buttons.set_halign(Gtk.Align.END)
+        check = Gtk.Button(label="Sprawdź aktualizacje")
+        check.connect("clicked", lambda _button: self.check_for_updates(manual=True))
         history = Gtk.Button(label="Historia zmian")
         history.connect("clicked", lambda _button: self.show_history())
         close = Gtk.Button(label="Zamknij")
         close.connect("clicked", lambda _button: dialog.close())
+        buttons.append(check)
         buttons.append(history)
         buttons.append(close)
         dialog.root_box.append(title)
         dialog.root_box.append(description)
         dialog.root_box.append(details)
+        dialog.root_box.append(update_check)
         dialog.root_box.append(buttons)
         dialog.present()
 
     def on_close_request(self, _window: Gtk.Window) -> bool:
-        width, height = self.get_default_size()
-        settings = {
-            "dark_mode": self.dark_switch.get_active(),
-            "font_scale": round(float(self.font_scale.get_value()), 1),
-            "width": max(width, 900),
-            "height": max(height, 650),
-            "maximized": self.is_maximized(),
-        }
-        try:
-            save_settings(settings)
-        except OSError:
-            LOG.exception("Nie udało się zapisać ustawień")
+        self._save_current_settings()
         return False
 
 

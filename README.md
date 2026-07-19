@@ -1,20 +1,20 @@
-# Sesyjka GTK4 0.6.4
+# Sesyjka GTK4 0.7.0
 
-Natywny port programu Sesyjka dla Linuksa, zbudowany w Pythonie, GTK4 i Libadwaita. Port zachowuje cztery bazy SQLite projektu źródłowego i rozdziela logikę danych od warstwy prezentacji.
+Natywna aplikacja dla Linuksa zbudowana w Pythonie, GTK4 i Libadwaita. Program kataloguje systemy RPG, podręczniki, suplementy, sesje, graczy i wydawców. Zachowuje zgodność z czterema bazami SQLite projektu źródłowego.
 
-## Najważniejsze funkcje
+Repozytorium wynikowe: https://github.com/Lioheart/Sesyjka
 
-Program obsługuje katalog systemów RPG, podręczników i suplementów w układzie hierarchicznym. Dostępne są statusy kolekcji i gry, wersje fizyczne i PDF, język, VTT, ceny, waluty, rok wydania oraz ISBN. Tabele mają wyszukiwanie globalne, filtry kolumnowe, sortowanie, zmianę szerokości kolumn i menu kontekstowe z edycją oraz usuwaniem.
+Projekt źródłowy i atrybucja: https://github.com/ZuraffPL/sesyjka
 
-Sesje są przypisywane do rekordów z katalogu systemów gry. Formularz obsługuje mistrza gry, sesje GM-less, tryb gry, kampanię, jednostrzał, tytuły, notatki, graczy i szybki wybór grupy. Zapis sesji bez co najmniej jednego istniejącego gracza jest blokowany.
+## Funkcje
 
-Dostępne są osobne moduły graczy, wydawców i statystyk. Statystyki odświeżają się po operacjach CRUD i pokazują zestawienia oraz natywne wykresy ilości GTK4.
+Program obsługuje hierarchię systemów gry, podręczników głównych i suplementów. Dostępne są statusy kolekcji i gry, wersje fizyczne, PDF i VTT, język, rok, ISBN, ceny oraz waluty. Tabele mają wyszukiwanie globalne, filtry kolumnowe, sortowanie, zmianę szerokości kolumn i menu kontekstowe.
 
-Transfer danych obejmuje eksport ZIP, eksport czterech baz do folderu, eksport XLSX, import ZIP lub folderu z walidacją i kopią zapasową, a także tryb gościa tylko do odczytu.
+Sesje są przypisywane do systemów gry. Formularz obsługuje mistrza gry, sesje GM-less, kampanie, jednostrzały, tryb gry, przygody, notatki i grupy graczy. Zapis sesji bez co najmniej jednego istniejącego gracza jest blokowany.
 
-Pełne porównanie z projektem źródłowym znajduje się w [FUNCTIONALITY_AUDIT.md](FUNCTIONALITY_AUDIT.md).
+Dostępne są statystyki z tabelami podsumowującymi i wykresami ilości, eksport ZIP, eksport do folderu, eksport XLSX, import z walidacją i kopią zapasową oraz tryb gościa tylko do odczytu.
 
-## Dane i zgodność
+## Dane użytkownika
 
 Domyślne lokalizacje:
 
@@ -33,19 +33,80 @@ gracze.db
 wydawcy.db
 ```
 
-Przed zmianą starszego schematu program tworzy kopię istniejących baz w katalogu `backups/schema-...`. Import zastępujący własne bazy również tworzy kopię zapasową. Wszystkie połączenia w warstwie danych włączają `PRAGMA foreign_keys = ON`. Odwołania pomiędzy osobnymi plikami SQLite są sprawdzane w Pythonie.
-
-Log diagnostyczny jest rotowany i zapisywany jako:
+Log diagnostyczny:
 
 ```text
 ${XDG_STATE_HOME:-~/.local/state}/sesyjka/sesyjka.log
 ```
 
+## Instalacja z GitHub Release
+
+### Ubuntu i systemy Debianowe
+
+Pobierz plik `sesyjka_X.Y.Z_all.deb`, a następnie:
+
+```bash
+sudo apt install ./sesyjka_X.Y.Z_all.deb
+```
+
+Pakiet deklaruje zależności GTK4, Libadwaita, PyGObject i openpyxl. Kod aplikacji jest instalowany w `/usr/share/sesyjka`, a program uruchamiający w `/usr/bin/sesyjka`.
+
+Odinstalowanie:
+
+```bash
+sudo apt remove sesyjka
+```
+
+### Fedora
+
+Pobierz plik `sesyjka-X.Y.Z-1.fc*.noarch.rpm`, a następnie:
+
+```bash
+sudo dnf install ./sesyjka-X.Y.Z-1.fc*.noarch.rpm
+```
+
+Odinstalowanie:
+
+```bash
+sudo dnf remove sesyjka
+```
+
+### Pozostałe dystrybucje
+
+Pobierz `sesyjka-X.Y.Z-linux-installer.tar.gz` lub `.zip`, rozpakuj i uruchom:
+
+```bash
+chmod +x install-linux.sh uninstall-linux.sh run.sh
+./install-linux.sh
+```
+
+Instalator ogólny używa:
+
+```text
+/opt/sesyjka/
+/usr/local/bin/sesyjka
+/usr/local/share/applications/
+/usr/local/share/metainfo/
+/usr/local/share/icons/hicolor/
+```
+
+Odinstalowanie z zachowaniem danych:
+
+```bash
+./uninstall-linux.sh
+```
+
+Całkowite usunięcie danych bieżącego użytkownika:
+
+```bash
+./uninstall-linux.sh --purge-data
+```
+
 ## Uruchomienie lokalne
 
-`run.sh` wyłącznie uruchamia kod z bieżącego katalogu. Nie instaluje programu, nie kopiuje plików i nie tworzy wpisu w menu aplikacji.
+`run.sh` wyłącznie uruchamia kod z bieżącego katalogu. Nie instaluje programu, nie kopiuje plików i nie modyfikuje systemu.
 
-Wymagane pakiety systemowe dla Debiana lub Ubuntu:
+Ubuntu:
 
 ```bash
 sudo apt install python3 python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 python3-openpyxl
@@ -66,110 +127,64 @@ sudo pacman -S python python-gobject gtk4 libadwaita python-openpyxl
 ./run.sh
 ```
 
-Można wskazać inny interpreter:
+## Aktualizacje
 
-```bash
-SESYJKA_PYTHON=/ścieżka/do/python3 ./run.sh
-```
+Aplikacja sprawdza najnowsze stabilne wydanie w repozytorium `Lioheart/Sesyjka` podczas uruchamiania, nie częściej niż co 6 godzin. Sprawdzenie można również uruchomić ręcznie przyciskiem aktualizacji w nagłówku lub w oknie „O programie”.
 
-## Instalacja systemowa
+Po wykryciu nowszej wersji aplikacja:
 
-```bash
-chmod +x install-linux.sh uninstall-linux.sh run.sh
-./install-linux.sh
-```
+1. wybiera pakiet odpowiadający kanałowi instalacji, czyli DEB, RPM albo instalator ogólny,
+2. pobiera pakiet i weryfikuje jego sumę SHA-256,
+3. prosi o potwierdzenie uprawnień administratora przez Polkit,
+4. uruchamia `apt-get`, `dnf` albo `install-linux.sh`,
+5. informuje o konieczności ponownego uruchomienia programu.
 
-Skrypt używa `sudo`, gdy nie jest uruchomiony jako administrator. Domyślnie instaluje:
+Lokalna kopia uruchomiona przez `run.sh` nie jest automatycznie nadpisywana. Program otwiera stronę najnowszego wydania.
 
-```text
-/opt/sesyjka/
-/usr/local/bin/sesyjka
-/usr/local/share/applications/io.github.zuraffpl.Sesyjka.desktop
-/usr/local/share/metainfo/io.github.zuraffpl.Sesyjka.metainfo.xml
-/usr/local/share/icons/hicolor/
-```
+Automatyczne sprawdzanie można wyłączyć w oknie „O programie”. Brak programu `pkexec` nie blokuje ręcznego pobrania wydania.
 
-Po instalacji program można uruchomić z menu pulpitu lub poleceniem:
+## Automatyczne budowanie Release
 
-```bash
-sesyjka
-```
-
-## Odinstalowanie systemowe
-
-Z katalogu źródłowego:
-
-```bash
-./uninstall-linux.sh
-```
-
-Albo z katalogu instalacji:
-
-```bash
-sudo /opt/sesyjka/uninstall-linux.sh
-```
-
-Domyślnie deinstalator pozostawia dane użytkownika. Całkowite usunięcie danych bieżącego użytkownika:
-
-```bash
-./uninstall-linux.sh --purge-data
-```
-
-Bez pytania o potwierdzenie:
-
-```bash
-./uninstall-linux.sh --purge-data --yes
-```
-
-Skrypt nie usuwa danych innych użytkowników ani danych instalacji Flatpak.
-
-## Flatpak i Flathub
-
-Lokalny manifest znajduje się w `flatpak/io.github.zuraffpl.Sesyjka.yml`. Pakiet nie ma stałego dostępu do katalogu domowego. Wybór plików odbywa się przez natywne okna GTK i portal dokumentów.
-
-```bash
-flatpak remote-add --user --if-not-exists flathub \
-  https://dl.flathub.org/repo/flathub.flatpakrepo
-flatpak install --user flathub \
-  org.flatpak.Builder org.gnome.Platform//50 org.gnome.Sdk//50
-./flatpak/build-local.sh
-flatpak run io.github.zuraffpl.Sesyjka
-```
-
-Instrukcja przygotowania zgłoszenia znajduje się w [FLATHUB.md](FLATHUB.md).
-
-Interfejs użytkownika jest obecnie polskojęzyczny. Zgodnie z aktualnymi zasadami Flathub nowe zgłoszenie wymaga kompletnej lokalizacji angielskiej albo zaakceptowanego wyjątku. Manifest, metadane i piaskownica są przygotowane technicznie, ale publikacja nie jest gwarantowana bez spełnienia tego wymagania.
-
-## Zrzuty ekranu
-
-Katalog `screenshots/` zawiera wszystkie 11 plików przekazanych do wydania:
+Workflow `.github/workflows/release.yml` uruchamia się po opublikowaniu GitHub Release. Tag musi mieć postać `vX.Y.Z`, a numer musi być zgodny z:
 
 ```text
-image.png
-image2.png
-image3.png
-image4.png
-image5.png
-image6.png
-image7.png
-image8.png
-image9.png
-image10.png
-image11.png
+pyproject.toml
+sesyjka/__init__.py
 ```
 
-MetaInfo odwołuje się do 10 reprezentatywnych obrazów, ponieważ wytyczne jakości Flathub zalecają dla dużych aplikacji od 6 do 10 zrzutów.
+Workflow uruchamia testy i dołącza do Release:
+
+```text
+sesyjka_X.Y.Z_all.deb
+sesyjka-X.Y.Z-1.fc*.noarch.rpm
+sesyjka-X.Y.Z-linux-installer.tar.gz
+sesyjka-X.Y.Z-linux-installer.zip
+SHA256SUMS
+```
+
+Procedura wydania:
+
+1. Zmień wersję w `pyproject.toml`, `sesyjka/__init__.py` i MetaInfo.
+2. Zatwierdź zmiany w gałęzi `main`.
+3. Utwórz tag `vX.Y.Z` dla tego zatwierdzenia.
+4. Utwórz i opublikuj GitHub Release z tym tagiem.
+5. Poczekaj na zakończenie workflow „Build release packages”.
+6. Sprawdź, czy wszystkie pięć typów zasobów zostało dołączonych do wydania.
+
+Nazwy plików są częścią protokołu aktualizacji. Nie należy ich zmieniać ręcznie.
+
+Szczegóły budowania lokalnego znajdują się w [packaging/README.md](packaging/README.md).
 
 ## Testy
 
 ```bash
 python3 -m compileall -q sesyjka tests
 python3 -m unittest discover -s tests -v
-bash -n run.sh install-linux.sh uninstall-linux.sh flatpak/build-local.sh
+bash -n run.sh install-linux.sh uninstall-linux.sh packaging/*.sh
 ```
 
-Testy obejmują CRUD, walidację powiązań pomiędzy bazami, sesje bez graczy, migrację schematu z kopią zapasową, eksport ZIP i folderu, kontrolę importu, tryb gościa, statystyki, skrypty instalacyjne, zasoby pulpitu i pakowanie Flatpak.
+Testy obejmują CRUD, integralność między bazami, walidację sesji, migrację schematu, transfer danych, tryb gościa, statystyki, skrypty instalacyjne, pakowanie Release oraz aktualizator.
 
 ## Licencja
 
-Port zachowuje licencję CC BY 4.0 oraz atrybucję projektu źródłowego. Zobacz `LICENSE` i `NOTICE.md`.
+Port zachowuje licencję CC BY 4.0 i atrybucję projektu źródłowego. Zobacz `LICENSE` i `NOTICE.md`.

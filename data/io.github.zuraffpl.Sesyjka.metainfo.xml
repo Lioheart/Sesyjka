@@ -33,52 +33,58 @@
     <color type="primary" scheme_preference="dark">#1c4f8a</color>
   </branding>
   <content_rating type="oars-1.1" />
-  <url type="homepage">https://github.com/ZuraffPL/sesyjka</url>
-  <url type="bugtracker">https://github.com/ZuraffPL/sesyjka/issues</url>
-  <url type="vcs-browser">https://github.com/ZuraffPL/sesyjka</url>
+  <url type="homepage">https://github.com/Lioheart/Sesyjka</url>
+  <url type="bugtracker">https://github.com/Lioheart/Sesyjka/issues</url>
+  <url type="vcs-browser">https://github.com/Lioheart/Sesyjka</url>
   <screenshots>
     <screenshot type="default" xml:lang="pl">
-      <image>https://raw.githubusercontent.com/ZuraffPL/sesyjka/v0.6.4/screenshots/image.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.7.0/screenshots/image.png</image>
       <caption>Przeglądaj systemy RPG i hierarchiczną kolekcję podręczników</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/ZuraffPL/sesyjka/v0.6.4/screenshots/image2.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.7.0/screenshots/image2.png</image>
       <caption>Edytuj lub usuwaj rekordy z menu kontekstowego</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/ZuraffPL/sesyjka/v0.6.4/screenshots/image4.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.7.0/screenshots/image4.png</image>
       <caption>Dodawaj systemy gry i przypisuj wydawców</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/ZuraffPL/sesyjka/v0.6.4/screenshots/image5.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.7.0/screenshots/image5.png</image>
       <caption>Twórz wydawcę bez zamykania aktualnego formularza</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/ZuraffPL/sesyjka/v0.6.4/screenshots/image6.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.7.0/screenshots/image6.png</image>
       <caption>Zapisuj sesje z systemami, graczami, kampaniami i notatkami</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/ZuraffPL/sesyjka/v0.6.4/screenshots/image7.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.7.0/screenshots/image7.png</image>
       <caption>Zarządzaj katalogiem graczy i tagami grup</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/ZuraffPL/sesyjka/v0.6.4/screenshots/image8.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.7.0/screenshots/image8.png</image>
       <caption>Zarządzaj danymi wydawców i ich stronami internetowymi</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/ZuraffPL/sesyjka/v0.6.4/screenshots/image9.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.7.0/screenshots/image9.png</image>
       <caption>Analizuj statystyki kolekcji i sesji w jasnym motywie</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/ZuraffPL/sesyjka/v0.6.4/screenshots/image10.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.7.0/screenshots/image10.png</image>
       <caption>Korzystaj z pełnego interfejsu w ciemnym motywie Adwaita</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/ZuraffPL/sesyjka/v0.6.4/screenshots/image11.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.7.0/screenshots/image11.png</image>
       <caption>Eksportuj i importuj bazy oraz przeglądaj je w trybie gościa</caption>
     </screenshot>
   </screenshots>
   <releases>
+    <release version="0.7.0" date="2026-07-19">
+      <description>
+        <p>Added automated GitHub Release builds for Ubuntu DEB, Fedora RPM and a generic Linux installer. The application can detect, verify and install newer stable releases.</p>
+        <p xml:lang="pl">Dodano automatyczne budowanie pakietów DEB dla Ubuntu, RPM dla Fedory i instalatora ogólnego przy publikowaniu wydania GitHub. Aplikacja wykrywa, weryfikuje i instaluje nowsze stabilne wydania.</p>
+      </description>
+    </release>
     <release version="0.6.4" date="2026-07-19">
       <description>
         <p>Separated local execution from system installation, added a complete system uninstaller and bundled the full screenshot set.</p>

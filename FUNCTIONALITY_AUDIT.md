@@ -4,7 +4,7 @@ Punktem odniesienia są `CLAUDE.MD` i sekcja funkcjonalności oraz changelogu z 
 
 ## Funkcje pokryte
 
-| Obszar źródłowy | Stan portu GTK4 0.6.4 |
+| Obszar źródłowy | Stan portu GTK4 0.7.0 |
 |---|---|
 | Cztery oddzielne bazy SQLite | Zachowane: systemy, sesje, gracze i wydawcy |
 | Systemy RPG, podręczniki i suplementy | CRUD oraz hierarchia system, podręcznik nadrzędny i pozycje podrzędne |
@@ -43,7 +43,6 @@ Punktem odniesienia są `CLAUDE.MD` i sekcja funkcjonalności oraz changelogu z 
 | Trójkolorowe reguły wierszy systemów | Hierarchia i zaznaczenie są zachowane, dokładna paleta źródłowa nie została odtworzona |
 | Wielokrotny selektor typów suplementów | Pole podgrupy jest elastycznym tekstem i może przechowywać kilka tagów rozdzielonych przecinkami |
 | Osobny ekran historii uczestnictwa gracza | Udział graczy jest dostępny w statystykach, bez osobnego widoku historii |
-| Pełna angielska lokalizacja | Brak. Jest to najważniejsza przeszkoda dla bezwarunkowego przyjęcia do Flathub |
 
 ## Wnioski
 

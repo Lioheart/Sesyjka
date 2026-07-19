@@ -42,9 +42,9 @@ Agregacja odbywa się w `Repository.statistics()`, poza widgetami. Widok renderu
 
 `run.sh` tylko uruchamia źródła. `install-linux.sh` wykonuje instalację systemową do `/opt` i `/usr/local`. `uninstall-linux.sh` usuwa tę instalację i opcjonalnie dane bieżącego użytkownika. Ikona Wayland jest instalowana z Desktop Entry zgodnym z `application-id`.
 
-## Flatpak
+## Pakowanie wydań
 
-Manifest instaluje program i metadane do `/app`. Nie otrzymuje dostępu do całego katalogu domowego. `openpyxl` i `et_xmlfile` są przypięte do konkretnych archiwów źródłowych i sum SHA-256. MetaInfo zawiera OARS, wydania, adresy projektu i zrzuty z niezmiennego tagu.
+Wersja wynikowa buduje pakiety DEB, RPM i instalator ogólny przez GitHub Actions po opublikowaniu wydania. Wcześniejsze pliki Flatpak i Flathub zostały usunięte z bieżącego drzewa projektu.
 
 ## Kontrole wydania
 
@@ -53,6 +53,6 @@ Manifest instaluje program i metadane do `/app`. Nie otrzymuje dostępu do całe
 3. Testy CRUD, migracji, backupu, importu, eksportu i trybu gościa.
 4. Testy integralności powiązań pomiędzy bazami.
 5. Testy źródłowe tabel, motywu, popoverów, statystyk i ikony Wayland.
-6. Testy manifestu, metadanych, zależności i zrzutów Flatpak.
+6. Testy pakietów Release, metadanych, sum kontrolnych i aktualizatora.
 7. Kontrola składni skryptów Bash.
 8. Skan kodu pod kątem Tkintera, CustomTkintera i tksheet.

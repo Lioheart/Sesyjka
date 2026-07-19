@@ -3,6 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_ID="io.github.zuraffpl.Sesyjka"
+UPDATE_REPOSITORY="Lioheart/Sesyjka"
 INSTALL_ROOT="${SESYJKA_INSTALL_ROOT:-/opt/sesyjka}"
 BIN_PATH="${SESYJKA_BIN_PATH:-/usr/local/bin/sesyjka}"
 DATA_PREFIX="${SESYJKA_SYSTEM_DATA_PREFIX:-/usr/local/share}"
@@ -61,6 +62,8 @@ chmod 0755 "$STAGE/app/uninstall-linux.sh"
 
 cat > "$STAGE/bin/sesyjka" <<WRAPPER
 #!/usr/bin/env sh
+export SESYJKA_INSTALL_CHANNEL="generic"
+export SESYJKA_UPDATE_REPOSITORY="$UPDATE_REPOSITORY"
 PYTHONPATH="$INSTALL_ROOT\${PYTHONPATH:+:\$PYTHONPATH}" exec python3 -m sesyjka "\$@"
 WRAPPER
 chmod 0755 "$STAGE/bin/sesyjka"

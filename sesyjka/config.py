@@ -54,6 +54,8 @@ def load_settings() -> dict[str, Any]:
         "width": 1280,
         "height": 800,
         "maximized": False,
+        "check_updates": True,
+        "last_update_check": 0,
     }
     try:
         loaded = json.loads(settings_path().read_text(encoding="utf-8"))

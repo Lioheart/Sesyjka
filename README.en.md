@@ -1,66 +1,72 @@
-# Sesyjka GTK4 0.6.4
+# Sesyjka GTK4 0.7.0
 
-Sesyjka is a native GTK4 and Libadwaita application for Linux. It manages tabletop RPG systems, hierarchical book collections, sessions, players, publishers and collection statistics while retaining the four SQLite database files used by the upstream project.
+A native Linux application built with Python, GTK4 and Libadwaita. It manages tabletop RPG systems, books, supplements, sessions, players, publishers and four compatible SQLite databases.
 
-## Core features
+Result repository: https://github.com/Lioheart/Sesyjka
 
-The application provides hierarchical system, core-book and supplement management, sortable and filterable tables, right-click editing and deletion, session notes, player groups, publisher assignment, collection prices, currencies, VTT data, release years and ISBN values. Sessions require at least one valid player and use the game-system catalogue rather than book titles.
+Original project and attribution: https://github.com/ZuraffPL/sesyjka
 
-Database transfer includes ZIP export, folder export, XLSX export, validated ZIP or folder import with backup, and a read-only guest mode. Cross-database identifiers are validated in Python. Existing databases are backed up before schema migration.
+## Release packages
 
-The interface provides forced light and dark Adwaita styles, text scaling, help, release history, quantity charts and automatic statistics refresh after data changes.
+Every published GitHub Release triggers `.github/workflows/release.yml`. A release tag must use `vX.Y.Z` and match the versions in `pyproject.toml` and `sesyjka/__init__.py`.
 
-## Local execution
+The workflow attaches:
 
-`run.sh` only starts the source tree. It does not install desktop files or copy application files.
+- `sesyjka_X.Y.Z_all.deb` for Ubuntu and Debian based systems
+- `sesyjka-X.Y.Z-1.fc*.noarch.rpm` for Fedora
+- `sesyjka-X.Y.Z-linux-installer.tar.gz` and `.zip` for other distributions
+- `SHA256SUMS` for update verification
+
+Ubuntu installation:
 
 ```bash
-./run.sh
+sudo apt install ./sesyjka_X.Y.Z_all.deb
 ```
 
-## System installation
+Fedora installation:
+
+```bash
+sudo dnf install ./sesyjka-X.Y.Z-1.fc*.noarch.rpm
+```
+
+Generic installation:
 
 ```bash
 ./install-linux.sh
-sesyjka
 ```
 
-The default installation paths are `/opt/sesyjka`, `/usr/local/bin/sesyjka` and `/usr/local/share`.
+## Updates
 
-System removal while retaining user data:
+The application checks the latest stable GitHub Release at startup, at most once every six hours. A manual check is available from the header and the About window.
+
+For DEB, RPM and generic system installations, the updater selects the matching release asset, verifies SHA-256, requests administrator authorisation through Polkit and invokes the appropriate installer. A source checkout started with `run.sh` is never overwritten automatically and instead opens the release page.
+
+## Local execution
+
+`run.sh` only starts the current source tree. It does not install, copy or update system files.
+
+Ubuntu dependencies:
 
 ```bash
-sudo /opt/sesyjka/uninstall-linux.sh
+sudo apt install python3 python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 python3-openpyxl
+./run.sh
 ```
 
-Removal including the current user's data:
+Fedora dependencies:
 
 ```bash
-sudo /opt/sesyjka/uninstall-linux.sh --purge-data
+sudo dnf install python3 python3-gobject gtk4 libadwaita python3-openpyxl
+./run.sh
 ```
-
-## Flatpak
-
-```bash
-flatpak install --user flathub \
-  org.flatpak.Builder org.gnome.Platform//50 org.gnome.Sdk//50
-./flatpak/build-local.sh
-flatpak run io.github.zuraffpl.Sesyjka
-```
-
-The sandbox does not request unrestricted home-directory access. File import and export use GTK's native file selection and desktop portals.
-
-## Flathub status
-
-The manifest, MetaInfo, desktop file, icons, pinned Python dependencies and release screenshot set are prepared for a Flathub submission. The user interface is currently available in Polish. Flathub requires a complete English localisation for new submissions unless an exception is accepted, so publication is not guaranteed until that policy requirement is resolved.
 
 ## Tests
 
 ```bash
 python3 -m compileall -q sesyjka tests
 python3 -m unittest discover -s tests -v
+bash -n run.sh install-linux.sh uninstall-linux.sh packaging/*.sh
 ```
 
 ## License
 
-The port retains the upstream CC BY 4.0 license and attribution. See `LICENSE` and `NOTICE.md`.
+The port retains the CC BY 4.0 license and attribution of the original project. See `LICENSE` and `NOTICE.md`.

@@ -24,7 +24,7 @@ Użycie:
   ./uninstall-linux.sh --purge-data --yes
       usuwa dane bez pytania o potwierdzenie
 
-Deinstalator nie usuwa danych innych użytkowników systemu ani danych Flatpaka.
+Deinstalator nie usuwa danych innych użytkowników systemu.
 TXT
       exit 0
       ;;
