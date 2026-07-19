@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Callable
+import re
 from typing import Any
 
 import gi
@@ -13,6 +14,16 @@ from ..dialogs import ModalWindow, confirm, info, make_entry
 from ..repository import Repository
 from ..widgets import Choice, ChoiceDropDown, FormGrid, TextDropDown
 from .base import CrudPage
+
+
+SUPPLEMENT_TYPES = (
+    "Scenariusz/kampania",
+    "Rozwinięcie zasad",
+    "Moduł",
+    "Lorebook/Sourcebook",
+    "Bestiariusz",
+    "Starter/Zestaw Startowy",
+)
 
 
 class SystemsPage(CrudPage):
@@ -384,7 +395,27 @@ class SystemsPage(CrudPage):
             record.get("wydawca_id") if record else None,
         )
         language = make_entry(record.get("jezyk") if record else "", "Język")
-        supplement_type = make_entry(record.get("typ_suplementu") if record else "", "Np. bestiariusz, starter")
+
+        raw_supplement_types = str(record.get("typ_suplementu") or "") if record else ""
+        existing_supplement_types = [
+            value.strip()
+            for value in re.split(r"[;,|\n]+", raw_supplement_types)
+            if value.strip()
+        ]
+        standard_by_key = {value.casefold(): value for value in SUPPLEMENT_TYPES}
+        selected_supplement_keys = {value.casefold() for value in existing_supplement_types}
+        legacy_supplement_types = [
+            value for value in existing_supplement_types if value.casefold() not in standard_by_key
+        ]
+        supplement_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        supplement_box.add_css_class("supplement-type-list")
+        supplement_checks: list[tuple[str, Gtk.CheckButton]] = []
+        for supplement_label in (*SUPPLEMENT_TYPES, *legacy_supplement_types):
+            check = Gtk.CheckButton(label=supplement_label)
+            check.set_active(supplement_label.casefold() in selected_supplement_keys)
+            supplement_box.append(check)
+            supplement_checks.append((supplement_label, check))
+
         game_status = TextDropDown(
             ["Nie grane", "Grane"],
             str(record.get("status_gra") or "Nie grane") if record else "Nie grane",
@@ -424,7 +455,19 @@ class SystemsPage(CrudPage):
         purchase_price = make_entry("", "Wyliczana automatycznie")
         purchase_price.set_editable(False)
         purchase_price.set_can_focus(False)
-        currency = make_entry(record.get("waluta_zakupu") if record else "PLN", "Waluta zakupu")
+        currency = make_entry(
+            record.get("waluta_zakupu") if record else "PLN",
+            "PLN, USD, EUR lub GBP",
+        )
+        currency.set_tooltip_text("Najczęściej używane kody: PLN, USD, EUR lub GBP")
+        currency.set_icon_from_icon_name(
+            Gtk.EntryIconPosition.SECONDARY,
+            "dialog-information-symbolic",
+        )
+        currency.set_icon_tooltip_text(
+            Gtk.EntryIconPosition.SECONDARY,
+            "Najczęściej używane kody walut: PLN, USD, EUR lub GBP",
+        )
         sale_price = make_entry(record.get("cena_sprzedazy") if record else "", "Cena sprzedaży")
         sale_currency = make_entry(record.get("waluta_sprzedazy") if record else "PLN", "Waluta sprzedaży")
         year = make_entry(record.get("rok_wydania") if record else "", "RRRR")
@@ -441,7 +484,7 @@ class SystemsPage(CrudPage):
         form.add_row("Status kolekcji", collection_status)
         form.add_row("Rok wydania", year)
         form.add_row("Numer ISBN", isbn)
-        form.add_row("Podgrupa suplementu", supplement_type)
+        form.add_row("Podgrupa suplementu", supplement_box)
         form.add_row("Platforma VTT", vtt_platform)
         form.add_row("Cena fizyczna", price_physical)
         form.add_row("Cena VTT", price_vtt)
@@ -472,6 +515,7 @@ class SystemsPage(CrudPage):
             purchase_price.set_text(f"{total:.2f}")
 
         def update_visibility(*_args: object) -> None:
+            form.set_row_visible(supplement_box, item_type.text() == "Suplement")
             form.set_row_visible(vtt_platform, vtt_enabled.get_active())
             form.set_row_visible(price_physical, physical.get_active())
             form.set_row_visible(price_pdf, pdf.get_active())
@@ -484,6 +528,7 @@ class SystemsPage(CrudPage):
         for toggle in (physical, pdf, vtt_enabled):
             toggle.connect("toggled", update_visibility)
         collection_status.connect("notify::selected", update_visibility)
+        item_type.connect("notify::selected", update_visibility)
         for entry in (price_physical, price_pdf, price_vtt):
             entry.connect("changed", update_total)
         update_visibility()
@@ -503,6 +548,9 @@ class SystemsPage(CrudPage):
                 if vtt_enabled.get_active() and not vtt_name:
                     raise ValueError("Wpisz nazwę platformy VTT.")
                 selling = collection_status.text() in {"Na sprzedaż", "Sprzedane"}
+                selected_supplement_types = [
+                    label for label, check in supplement_checks if check.get_active()
+                ]
                 self.repository.save_system(
                     {
                         "nazwa": name.get_text(),
@@ -511,7 +559,11 @@ class SystemsPage(CrudPage):
                         "system_glowny_id": parent_id,
                         "wydawca_id": publisher.identifier(),
                         "jezyk": language.get_text(),
-                        "typ_suplementu": supplement_type.get_text(),
+                        "typ_suplementu": (
+                            "; ".join(selected_supplement_types)
+                            if item_type.text() == "Suplement"
+                            else ""
+                        ),
                         "status_gra": game_status.text(),
                         "status_kolekcja": collection_status.text(),
                         "fizyczny": physical.get_active(),

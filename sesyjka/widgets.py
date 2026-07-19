@@ -17,6 +17,7 @@ ROW_STYLE_CLASSES = (
     "status-collection-loaned",
     "status-collection-mixed",
 )
+ROW_STRIPE_CLASSES = ("table-row-even", "table-row-odd")
 
 
 class TableRow(GObject.Object):
@@ -249,36 +250,43 @@ class DataTable(Gtk.Box):
         return popover
 
     def _setup_cell(self, _factory: Gtk.SignalListItemFactory, item: Gtk.ListItem, index: int) -> None:
+        cell = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        cell.set_hexpand(True)
+        cell.set_vexpand(True)
+        cell.add_css_class("table-cell")
+
         label = Gtk.Label(xalign=0.0)
+        label.set_hexpand(True)
         label.set_ellipsize(Pango.EllipsizeMode.END)
-        label.set_margin_start(8)
-        label.set_margin_end(8)
-        label.set_margin_top(6)
-        label.set_margin_bottom(6)
         if index == 0:
             label.add_css_class("numeric")
+        cell.append(label)
 
         gesture = Gtk.GestureClick()
         gesture.set_button(3)
         gesture.connect("pressed", self._on_context_pressed, item)
-        label.add_controller(gesture)
-        item.set_child(label)
+        cell.add_controller(gesture)
+        item.set_child(cell)
 
     @staticmethod
     def _bind_cell(_factory: Gtk.SignalListItemFactory, item: Gtk.ListItem, index: int) -> None:
         row = item.get_item()
-        label = item.get_child()
-        if isinstance(row, TableRow) and isinstance(label, Gtk.Label):
+        cell = item.get_child()
+        label = cell.get_first_child() if isinstance(cell, Gtk.Box) else None
+        if isinstance(row, TableRow) and isinstance(cell, Gtk.Box) and isinstance(label, Gtk.Label):
             label.set_text(row.values[index] if index < len(row.values) else "")
             if row.record.get("_is_group"):
                 label.add_css_class("heading")
             else:
                 label.remove_css_class("heading")
-            for css_class in ROW_STYLE_CLASSES:
-                label.remove_css_class(css_class)
+
+            for css_class in (*ROW_STYLE_CLASSES, *ROW_STRIPE_CLASSES):
+                cell.remove_css_class(css_class)
+            position = int(item.get_position())
+            cell.add_css_class("table-row-odd" if position % 2 else "table-row-even")
             row_css_class = str(row.record.get("_row_css_class") or "")
             if row_css_class in ROW_STYLE_CLASSES:
-                label.add_css_class(row_css_class)
+                cell.add_css_class(row_css_class)
 
     @staticmethod
     def _compare_rows(left: TableRow, right: TableRow, key: str) -> Gtk.Ordering:

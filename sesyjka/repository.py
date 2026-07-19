@@ -4,6 +4,7 @@ import csv
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
+import re
 from pathlib import Path
 from typing import Any
 
@@ -259,6 +260,19 @@ class Repository:
         normalized = dict(values)
         normalized["nazwa"] = name
         normalized["typ"] = item_type
+        if item_type.casefold() == "suplement":
+            supplement_values = [
+                part.strip()
+                for part in re.split(r"[;,|\n]+", str(normalized.get("typ_suplementu") or ""))
+                if part.strip()
+            ]
+            normalized["typ_suplementu"] = "; ".join(dict.fromkeys(supplement_values))
+        else:
+            normalized["typ_suplementu"] = None
+
+        for currency_key in ("waluta_zakupu", "waluta_sprzedazy"):
+            currency_code = str(normalized.get(currency_key) or "").strip().upper()
+            normalized[currency_key] = "GBP" if currency_code == "GPB" else currency_code
 
         game_system_id = normalized.get("system_gry_id")
         valid_game_system_ids = {int(item["id"]) for item in self.game_systems()}

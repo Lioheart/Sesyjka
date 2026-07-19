@@ -1,4 +1,4 @@
-# Sesyjka GTK4 0.8.1
+# Sesyjka GTK4 0.8.2
 
 A native Linux application built with Python, GTK4 and Libadwaita. It manages tabletop RPG systems, books, supplements, sessions, players, publishers and four compatible SQLite databases.
 
@@ -6,9 +6,12 @@ Result repository: https://github.com/Lioheart/Sesyjka
 
 Original project and attribution: https://github.com/ZuraffPL/sesyjka
 
-## Changes in 0.8.1
+## Changes in 0.8.2
 
-RPG rows are now colored by collection status. Database import uses a semantic confirmation action, the header database button uses a storage icon, statistics include the summed purchase value grouped by currency, and the two summary tables have a visible gap and separator.
+- collection-status backgrounds now fill the complete table row instead of individual text labels
+- all data tables use alternating striped rows
+- supplements support multiple checkbox-based subgroup classifications
+- the purchase currency field suggests the common PLN, USD, EUR and GBP codes
 
 ## Release packages
 

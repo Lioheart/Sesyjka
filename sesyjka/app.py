@@ -58,6 +58,16 @@ BASE_CSS = """
 .data-table header {
   font-weight: 700;
 }
+.table-cell {
+  padding: 6px 8px;
+  border-radius: 0;
+}
+.table-cell.table-row-even {
+  background-color: transparent;
+}
+.table-cell.table-row-odd {
+  background-color: alpha(@window_fg_color, 0.045);
+}
 .stat-card {
   min-width: 130px;
   padding: 16px;
@@ -113,26 +123,53 @@ BASE_CSS = """
   color: #c01c28;
 }
 
-.status-collection-owned {
+.table-cell.status-collection-owned {
   background-color: alpha(@success_color, 0.18);
 }
-.status-collection-for-sale {
-  background-color: alpha(@warning_color, 0.22);
+.table-cell.status-collection-owned.table-row-odd {
+  background-color: alpha(@success_color, 0.25);
 }
-.status-collection-sold {
+.table-cell.status-collection-for-sale {
+  background-color: alpha(@warning_color, 0.20);
+}
+.table-cell.status-collection-for-sale.table-row-odd {
+  background-color: alpha(@warning_color, 0.28);
+}
+.table-cell.status-collection-sold {
   background-color: alpha(@error_color, 0.12);
 }
-.status-collection-not-owned {
-  background-color: alpha(@window_fg_color, 0.06);
+.table-cell.status-collection-sold.table-row-odd {
+  background-color: alpha(@error_color, 0.18);
 }
-.status-collection-wishlist {
-  background-color: alpha(@accent_color, 0.16);
+.table-cell.status-collection-not-owned {
+  background-color: alpha(@window_fg_color, 0.025);
 }
-.status-collection-loaned {
-  background-color: rgba(145, 65, 172, 0.16);
+.table-cell.status-collection-not-owned.table-row-odd {
+  background-color: alpha(@window_fg_color, 0.075);
 }
-.status-collection-mixed {
-  background-color: alpha(@accent_color, 0.09);
+.table-cell.status-collection-wishlist {
+  background-color: alpha(@accent_color, 0.14);
+}
+.table-cell.status-collection-wishlist.table-row-odd {
+  background-color: alpha(@accent_color, 0.21);
+}
+.table-cell.status-collection-loaned {
+  background-color: rgba(145, 65, 172, 0.14);
+}
+.table-cell.status-collection-loaned.table-row-odd {
+  background-color: rgba(145, 65, 172, 0.21);
+}
+.table-cell.status-collection-mixed {
+  background-color: alpha(@accent_color, 0.08);
+}
+.table-cell.status-collection-mixed.table-row-odd {
+  background-color: alpha(@accent_color, 0.14);
+}
+.supplement-type-list {
+  padding: 10px 12px;
+  border: 1px solid alpha(@window_fg_color, 0.14);
+  border-radius: 10px;
+  background-color: @view_bg_color;
 }
 .statistics-table-separator {
   min-width: 1px;
@@ -581,6 +618,9 @@ class SesyjkaWindow(Adw.ApplicationWindow):
     def show_history(self) -> None:
         dialog = ModalWindow(self, "Historia zmian", width=720, height=620)
         history_text = (
+            "0.8.2\n"
+            "Kolory statusu kolekcji obejmują całe wiersze, a wszystkie tabele mają naprzemienne pasy. "
+            "Suplementy obsługują wielokrotny wybór podgrup, a pole waluty zakupu podpowiada popularne kody.\n\n"
             "0.8.1\n"
             "Kolory pozycji RPG zależą od statusu kolekcji. Poprawiono ikonę baz danych i przycisk potwierdzenia importu, "
             "dodano sumę wartości pozycji oraz odstęp z separatorem pomiędzy tabelami statystyk.\n\n"

@@ -241,6 +241,40 @@ class ApplicationSourceTests(unittest.TestCase):
         self.assertIn("export_sessions_csv", repository)
         self.assertIn('"All Day Event"', repository)
 
+    def test_table_backgrounds_fill_cells_and_use_zebra_striping(self) -> None:
+        widgets = (self.root / "sesyjka" / "widgets.py").read_text(encoding="utf-8")
+        app = (self.root / "sesyjka" / "app.py").read_text(encoding="utf-8")
+        self.assertIn('cell.add_css_class("table-cell")', widgets)
+        self.assertIn("ROW_STRIPE_CLASSES", widgets)
+        self.assertIn('item.get_position()', widgets)
+        self.assertIn(".table-cell.table-row-odd", app)
+        self.assertIn(".table-cell.status-collection-owned.table-row-odd", app)
+        self.assertNotIn("label.add_css_class(row_css_class)", widgets)
+
+    def test_supplements_support_multiple_checkbox_subgroups(self) -> None:
+        systems = (self.root / "sesyjka" / "pages" / "systems.py").read_text(encoding="utf-8")
+        repository = (self.root / "sesyjka" / "repository.py").read_text(encoding="utf-8")
+        for label in (
+            "Scenariusz/kampania",
+            "Rozwinięcie zasad",
+            "Moduł",
+            "Lorebook/Sourcebook",
+            "Bestiariusz",
+            "Starter/Zestaw Startowy",
+        ):
+            self.assertIn(label, systems)
+        self.assertIn("supplement_checks", systems)
+        self.assertIn('item_type.text() == "Suplement"', systems)
+        self.assertIn('"; ".join(selected_supplement_types)', systems)
+        self.assertIn('item_type.casefold() == "suplement"', repository)
+
+    def test_purchase_currency_has_common_code_hint(self) -> None:
+        systems = (self.root / "sesyjka" / "pages" / "systems.py").read_text(encoding="utf-8")
+        repository = (self.root / "sesyjka" / "repository.py").read_text(encoding="utf-8")
+        self.assertIn("PLN, USD, EUR lub GBP", systems)
+        self.assertIn("dialog-information-symbolic", systems)
+        self.assertIn('currency_code == "GPB"', repository)
+
 
 if __name__ == "__main__":
     unittest.main()

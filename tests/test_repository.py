@@ -389,6 +389,40 @@ class RepositoryTests(unittest.TestCase):
         self.assertIn("grupa", columns)
         self.assertEqual(count, 1)
 
+    def test_multiple_supplement_subgroups_are_preserved_without_schema_change(self) -> None:
+        game_system_id = self.repository.save_game_system({"nazwa": "System"})
+        record_id = self.repository.save_system(
+            {
+                "nazwa": "Suplement",
+                "typ": "Suplement",
+                "system_gry_id": game_system_id,
+                "typ_suplementu": "Bestiariusz; Moduł; Rozwinięcie zasad",
+            }
+        )
+        record = next(item for item in self.repository.systems() if item["id"] == record_id)
+        self.assertEqual(
+            record["typ_suplementu"],
+            "Bestiariusz; Moduł; Rozwinięcie zasad",
+        )
+        with self.databases.connect("systemy_rpg.db") as connection:
+            columns = {row[1] for row in connection.execute("PRAGMA table_info(systemy_rpg)")}
+        self.assertNotIn("podgrupy_suplementu", columns)
+
+    def test_non_supplement_clears_subgroup_and_gpb_is_normalized_to_gbp(self) -> None:
+        game_system_id = self.repository.save_game_system({"nazwa": "System"})
+        record_id = self.repository.save_system(
+            {
+                "nazwa": "Podręcznik",
+                "typ": "Podręcznik Główny",
+                "system_gry_id": game_system_id,
+                "typ_suplementu": "Bestiariusz",
+                "waluta_zakupu": "gpb",
+            }
+        )
+        record = next(item for item in self.repository.systems() if item["id"] == record_id)
+        self.assertIsNone(record["typ_suplementu"])
+        self.assertEqual(record["waluta_zakupu"], "GBP")
+
 
 if __name__ == "__main__":
     unittest.main()

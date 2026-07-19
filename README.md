@@ -1,4 +1,4 @@
-# Sesyjka GTK4 0.8.1
+# Sesyjka GTK4 0.8.2
 
 Natywna aplikacja dla Linuksa zbudowana w Pythonie, GTK4 i Libadwaita. Program kataloguje systemy RPG, podręczniki, suplementy, sesje, graczy, wydawców oraz gry planszowe i karciane.
 
@@ -8,9 +8,9 @@ Projekt źródłowy i atrybucja: https://github.com/ZuraffPL/sesyjka
 
 ## Funkcje
 
-Zakładka **Systemy RPG** obsługuje hierarchię systemów gry, podręczników głównych i pozycji podrzędnych. Dostępne są statusy kolekcji i gry, format fizyczny, PDF i VTT, język, rok wydania, ISBN, ceny oraz waluty. Wiersze mają tło zależne od statusu kolekcji. Pozycje w kolekcji są zielone, przeznaczone na sprzedaż żółte, sprzedane czerwone, nieposiadane neutralne, pozycje do kupienia niebieskie, a pożyczone fioletowe. Grupy z różnymi statusami mają delikatne tło akcentowe. Tabele mają wyszukiwanie globalne, filtry kolumnowe, sortowanie, zmianę szerokości kolumn i menu kontekstowe.
+Zakładka **Systemy RPG** obsługuje hierarchię systemów gry, podręczników głównych i pozycji podrzędnych. Dostępne są statusy kolekcji i gry, format fizyczny, PDF i VTT, język, rok wydania, ISBN, ceny oraz waluty. Całe wiersze mają tło zależne od statusu kolekcji. Pozycje w kolekcji są zielone, przeznaczone na sprzedaż żółte, sprzedane czerwone, nieposiadane neutralne, pozycje do kupienia niebieskie, a pożyczone fioletowe. Grupy z różnymi statusami mają delikatne tło akcentowe. Wszystkie tabele mają dodatkowo naprzemienne, pasiaste wiersze, wyszukiwanie globalne, filtry kolumnowe, sortowanie, zmianę szerokości kolumn i menu kontekstowe.
 
-Formularz pozycji RPG zawsze pokazuje nazwę, typ, system RPG, wydawcę, formaty, język, status gry, status kolekcji, rok wydania i ISBN. Pola cen fizycznej, VTT i PDF pojawiają się tylko dla zaznaczonych formatów. Cena łączna jest liczona automatycznie. Cena sprzedaży jest dostępna wyłącznie dla statusów `Na sprzedaż` i `Sprzedane`.
+Formularz pozycji RPG zawsze pokazuje nazwę, typ, system RPG, wydawcę, formaty, język, status gry, status kolekcji, rok wydania i ISBN. Dla suplementów udostępnia wielokrotny wybór podgrup: scenariusz lub kampania, rozwinięcie zasad, moduł, lorebook lub sourcebook, bestiariusz oraz starter. Pola cen fizycznej, VTT i PDF pojawiają się tylko dla zaznaczonych formatów. Cena łączna jest liczona automatycznie. Cena sprzedaży jest dostępna wyłącznie dla statusów `Na sprzedaż` i `Sprzedane`. Pole waluty zakupu podpowiada popularne kody PLN, USD, EUR i GBP.
 
 Zakładka **Sesje RPG** przypisuje sesje do systemów gry. Formularz obsługuje mistrza gry, sesje GM-less, kampanie, jednostrzały, tryb gry, przygody, notatki i grupy graczy. Zapis sesji bez co najmniej jednego istniejącego gracza jest blokowany. Sesje można eksportować do iCalendar `.ics` oraz do formatu `.csv` używanego między innymi przez import kalendarza Google.
 
@@ -20,13 +20,12 @@ Statystyki obejmują systemy RPG, sesje, graczy, wydawców, formaty fizyczne i P
 
 Transfer danych obejmuje eksport ZIP, eksport do folderu, eksport XLSX, eksport sesji do ICS i CSV, import z walidacją i kopią zapasową oraz tryb gościa tylko do odczytu.
 
-## Zmiany w 0.8.1
+## Zmiany w 0.8.2
 
-- kolorowanie pozycji RPG korzysta ze statusu kolekcji, nie statusu gry
-- przycisk baz danych używa ikony dysku danych zamiast dyskietki zapisu
-- potwierdzenie importu ma przycisk `Zaimportuj` oznaczony jako akcja zalecana
-- statystyki pokazują sumę cen zakupu wszystkich pozycji, osobno dla każdej waluty
-- pomiędzy tabelami statystyk dodano odstęp i pionowy separator
+- tło statusu kolekcji obejmuje całą powierzchnię wiersza, zamiast tylko tekstu w komórkach
+- wszystkie tabele korzystają z naprzemiennego, pasiastego tła wierszy
+- pozycja typu `Suplement` obsługuje wielokrotny wybór podgrup
+- waluta zakupu ma podpowiedź popularnych kodów PLN, USD, EUR i GBP
 
 ## Dane użytkownika i kompatybilność
 
@@ -50,7 +49,7 @@ planszowe.db
 
 Pierwsze cztery pliki zachowują schematy zgodne z projektem `ZuraffPL/sesyjka`. Nowa funkcja planszówek nie dodaje tabel ani kolumn do tych baz. Jest przechowywana wyłącznie w `planszowe.db`.
 
-Import i tryb gościa nadal akceptują zestaw zawierający tylko cztery oryginalne bazy. W takim przypadku zakładka gier planszowych pozostaje pusta. Eksport tworzony przez wersję 0.8.1 zawiera pięć baz.
+Import i tryb gościa nadal akceptują zestaw zawierający tylko cztery oryginalne bazy. W takim przypadku zakładka gier planszowych pozostaje pusta. Eksport tworzony przez wersję 0.8.2 zawiera pięć baz.
 
 Log diagnostyczny:
 
