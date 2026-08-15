@@ -4,7 +4,7 @@ import shutil
 import sqlite3
 import tempfile
 import zipfile
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterator, Sequence
@@ -194,7 +194,7 @@ class DatabaseManager:
     def _database_needs_schema_update(self, database: Path) -> bool:
         requirements = self.SCHEMA_REQUIREMENTS.get(database.name, {})
         try:
-            with sqlite3.connect(f"file:{database}?mode=ro", uri=True) as connection:
+            with closing(sqlite3.connect(f"file:{database}?mode=ro", uri=True)) as connection:
                 for table, required_columns in requirements.items():
                     row = connection.execute(
                         "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
@@ -521,7 +521,7 @@ class DatabaseManager:
             source = self.path(filename, own=True)
             if not source.exists():
                 continue
-            with sqlite3.connect(source) as connection:
+            with closing(sqlite3.connect(source)) as connection:
                 connection.row_factory = sqlite3.Row
                 tables = connection.execute(
                     "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
@@ -595,7 +595,7 @@ class DatabaseManager:
                     if require_current_schema
                     else {self.PRIMARY_TABLES[filename]: set()}
                 )
-                with sqlite3.connect(f"file:{database}?mode=ro", uri=True) as connection:
+                with closing(sqlite3.connect(f"file:{database}?mode=ro", uri=True)) as connection:
                     for table, required_columns in tables.items():
                         row = connection.execute(
                             "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",

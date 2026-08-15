@@ -42,6 +42,14 @@ Pole System korzysta z `systemy_gry`, a nie z nazw suplementów. Zapis wymaga is
 
 Agregacja odbywa się w `Repository.statistics()`, poza widgetami. Widok renderuje liczniki, dwie tabele podsumowujące i przełączane wykresy ilości. Licznik planszówek i karcianek otwiera wykres z osobnymi słupkami dla obu typów. Po każdej operacji CRUD statystyki są odświeżane przez wspólny mechanizm stron.
 
+## Sesyjka Cloud
+
+Wersja 0.9.1 dodaje niezależną warstwę synchronizacji. `sync.db` nie należy do `DB_FILES` i nie jest częścią importu ani eksportu baz domenowych. Zawiera identyfikator urządzenia, hasze ostatnio zsynchronizowanych rekordów i nierozwiązane konflikty.
+
+Klient Supabase korzysta z Auth oraz Data REST API przez standardową bibliotekę `urllib`, więc pakiety systemowe nie zyskują dodatkowej zależności Python. Lokalny CRUD nie zależy od sieci. Synchronizacja skanuje aktualne rekordy pięciu baz, porównuje stabilny JSON i hasze SHA-256 oraz wysyła zmiany lub pobiera wersje chmurowe. Jeżeli obie strony zmieniły rekord od ostatniej udanej synchronizacji, automatyczne nadpisanie jest zatrzymywane.
+
+Schemat backendu znajduje się w `supabase/schema.sql`. Tabela chmurowa ma włączone Row Level Security i polityki ograniczone do `auth.uid()` roli `authenticated`. Aplikacja przyjmuje wyłącznie klucz publishable/anon.
+
 ## Linux
 
 `run.sh` tylko uruchamia źródła. `install-linux.sh` wykonuje instalację systemową do `/opt` i `/usr/local`. `uninstall-linux.sh` usuwa tę instalację i opcjonalnie dane bieżącego użytkownika. Ikona Wayland jest instalowana z Desktop Entry zgodnym z `application-id`.
@@ -58,5 +66,6 @@ Wersja wynikowa buduje pakiety DEB, RPM i instalator ogólny przez GitHub Action
 4. Testy integralności powiązań pomiędzy bazami.
 5. Testy źródłowe tabel, motywu, popoverów, statystyk i ikony Wayland.
 6. Testy pakietów Release, metadanych, sum kontrolnych i aktualizatora.
-7. Kontrola składni skryptów Bash.
-8. Skan kodu pod kątem Tkintera, CustomTkintera i tksheet.
+7. Testy `sync.db`, uploadu, pobierania, tombstone i konfliktów Sesyjka Cloud.
+8. Kontrola składni skryptów Bash.
+9. Skan kodu pod kątem Tkintera, CustomTkintera i tksheet.

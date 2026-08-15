@@ -1,10 +1,40 @@
-# Sesyjka GTK4 0.8.9
+# Sesyjka GTK4 0.9.1
 
 A native Linux application built with Python, GTK4 and Libadwaita. It manages tabletop RPG systems, books, supplements, sessions, players, publishers, board games and card games. The four original SQLite databases remain compatible, while board and card games use a separate fifth database.
 
 Result repository: https://github.com/Lioheart/Sesyjka
 
 Original project and attribution: https://github.com/ZuraffPL/sesyjka
+
+## Sesyjka Cloud 0.9.1
+
+Version 0.9.1 uses Discord OAuth for the optional offline-first cloud synchronization. Existing SQLite databases remain the local source of truth and keep their current schemas. A separate `sync.db` stores synchronization mappings, device state and unresolved conflicts.
+
+The cloud backend uses Supabase Auth and the Supabase Data REST API. Run `supabase/schema.sql` in a Supabase project, then open the Cloud control in the application header and enter the Project URL and a publishable key. Never use a secret/service-role key in the desktop client.
+
+The application signs users in through Discord OAuth in the default browser, refreshes the resulting Supabase session, synchronizes manually or automatically, continues working offline, and explicitly resolves records that changed both locally and remotely. The header shows the current cloud state and conflict count.
+
+See `supabase/README.md` for setup instructions. Discord passwords never reach Sesyjka. Authentication takes place in the default browser using OAuth PKCE. The refresh token is stored in the user configuration directory with file mode `0600`, but version 0.9.1 does not encrypt that file itself.
+
+## Changes in 0.9.1
+
+- replaced email/password Cloud login with Discord OAuth
+- added OAuth Authorization Code with PKCE S256 and a loopback-only callback at `127.0.0.1:8765`
+- the first Discord login creates the Supabase Auth user automatically
+- successful login immediately starts cloud synchronization
+- original user database schemas remain unchanged
+
+## Changes in 0.9.0
+
+- added a separate `sync.db` without altering the five user-data database schemas
+- added Supabase Auth sign-up, sign-in, session refresh and sign-out
+- added offline-first local-to-cloud and cloud-to-local synchronization
+- added startup, periodic, debounced-after-CRUD and manual synchronization
+- added a visible Cloud status control in the application header
+- added explicit local/cloud conflict comparison and resolution
+- cloud deletions use tombstones so they can propagate to other devices
+- added `supabase/schema.sql` with Row Level Security policies scoped to `auth.uid()`
+- increased the main application title size
 
 ## Changes in 0.8.9
 

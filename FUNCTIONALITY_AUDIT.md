@@ -4,7 +4,7 @@ Punktem odniesienia są `CLAUDE.MD` i sekcja funkcjonalności oraz changelogu z 
 
 ## Funkcje pokryte
 
-| Obszar źródłowy | Stan portu GTK4 0.8.9 |
+| Obszar źródłowy | Stan portu GTK4 0.9.1 |
 |---|---|
 | Cztery oddzielne bazy SQLite projektu źródłowego | Zachowane bez dodawania tabel planszówkowych: systemy, sesje, gracze i wydawcy |
 | Osobna kolekcja planszówek i karcianek | Dodana w niezależnym pliku `planszowe.db`, bez zmiany czterech baz źródłowych |
@@ -32,6 +32,7 @@ Punktem odniesienia są `CLAUDE.MD` i sekcja funkcjonalności oraz changelogu z 
 | Migracja starszego schematu | Brakujące tabele i kolumny są tworzone po wykonaniu kopii zapasowej |
 | Integralność pomiędzy bazami | Walidacja ID w Pythonie przed zapisem i blokada usuwania rekordów powiązanych |
 | Integralność wewnątrz bazy | `PRAGMA foreign_keys = ON` dla każdego połączenia |
+| Sesyjka Cloud | Osobna `sync.db`, Supabase Auth, synchronizacja offline-first, status w GUI, automatyczne i ręczne synchronizowanie oraz konflikty bez zmian schematów baz użytkownika |
 
 ## Różnice i funkcje częściowe
 
@@ -41,10 +42,10 @@ Punktem odniesienia są `CLAUDE.MD` i sekcja funkcjonalności oraz changelogu z 
 | Graficzny kalendarz dat | Zastąpiony walidowanym polem `RRRR-MM-DD` |
 | Wykresy Matplotlib | Zastąpione natywnymi, dostępnymi wykresami ilości GTK4 |
 | Zapamiętywanie szerokości każdej kolumny | Kolumny można zmieniać, ale ich szerokości nie są jeszcze zapisywane |
-| Reguły kolorowania wierszy systemów | Zaimplementowane kolory Adwaita dla statusów Grane, Nie grane, Planowane i Ukończone |
-| Wielokrotny selektor typów suplementów | Pole podgrupy jest elastycznym tekstem i może przechowywać kilka tagów rozdzielonych przecinkami |
+| Reguły kolorowania wierszy systemów | Wycofane. `Gtk.ColumnView` korzysta z natywnego tła Adwaita i bezpiecznego zaznaczenia |
+| Wielokrotny selektor typów suplementów | Checkboxy wielokrotnego wyboru, zapis w istniejącej kolumnie tekstowej separatorem ` | ` |
 | Osobny ekran historii uczestnictwa gracza | Udział graczy jest dostępny w statystykach, bez osobnego widoku historii |
 
 ## Wnioski
 
-Wersja 0.8.9 zachowuje nieobsługiwane manipulowanie prywatnymi widgetami wierszy Gtk.ColumnView. Port zachowuje podstawowy przepływ pracy programu źródłowego: katalog kolekcji RPG, sesje, gracze, wydawcy, statystyki, filtry, transfer i bezpieczeństwo czterech baz. Wersja 0.8.9 obejmuje kolekcję planszówek i karcianek jako niezależne rozszerzenie w piątym pliku. Nie zmienia schematów czterech baz projektu źródłowego.
+Wersja 0.9.1 nie manipuluje prywatnymi widgetami wierszy Gtk.ColumnView. Port zachowuje podstawowy przepływ pracy programu źródłowego: katalog kolekcji RPG, sesje, gracze, wydawcy, statystyki, filtry, transfer i bezpieczeństwo czterech baz. Wersja 0.9.1 obejmuje kolekcję planszówek i karcianek jako niezależne rozszerzenie w piątym pliku. Nie zmienia schematów czterech baz projektu źródłowego. Sesyjka Cloud dodaje wyłącznie osobną bazę `sync.db` z metadanymi synchronizacji i konfliktami.

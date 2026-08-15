@@ -56,6 +56,9 @@ trap 'rm -rf "$STAGE"' EXIT
 mkdir -p "$STAGE/app" "$STAGE/bin"
 cp -a "$SCRIPT_DIR/sesyjka" "$STAGE/app/"
 cp -a "$SCRIPT_DIR/data" "$STAGE/app/"
+if [[ -d "$SCRIPT_DIR/supabase" ]]; then
+  cp -a "$SCRIPT_DIR/supabase" "$STAGE/app/"
+fi
 cp -a "$SCRIPT_DIR/LICENSE" "$SCRIPT_DIR/NOTICE.md" "$SCRIPT_DIR/README.md" "$STAGE/app/"
 cp -a "$SCRIPT_DIR/uninstall-linux.sh" "$STAGE/app/"
 chmod 0755 "$STAGE/app/uninstall-linux.sh"

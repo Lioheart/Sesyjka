@@ -54,6 +54,11 @@ stage_system_files() {
   if [[ -f "$PROJECT_ROOT/README.en.md" ]]; then
     install -m 0644 "$PROJECT_ROOT/README.en.md" "$root$data_prefix/doc/sesyjka/README.en.md"
   fi
+  if [[ -d "$PROJECT_ROOT/supabase" ]]; then
+    install -d "$root$data_prefix/doc/sesyjka/supabase"
+    install -m 0644 "$PROJECT_ROOT/supabase/schema.sql" "$root$data_prefix/doc/sesyjka/supabase/schema.sql"
+    install -m 0644 "$PROJECT_ROOT/supabase/README.md" "$root$data_prefix/doc/sesyjka/supabase/README.md"
+  fi
 
   cat > "$root$bin_path" <<WRAPPER
 #!/usr/bin/env sh

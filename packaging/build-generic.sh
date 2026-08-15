@@ -14,7 +14,7 @@ trap 'rm -rf "$STAGE"' EXIT
 PACKAGE_ROOT="$STAGE/sesyjka-$VERSION"
 mkdir -p "$PACKAGE_ROOT"
 
-for path in sesyjka data screenshots tests packaging .github; do
+for path in sesyjka data screenshots tests packaging .github supabase; do
   cp -a "$PROJECT_ROOT/$path" "$PACKAGE_ROOT/"
 done
 for file in \

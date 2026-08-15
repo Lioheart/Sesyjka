@@ -43,7 +43,7 @@ class ReleasePackagingTests(unittest.TestCase):
         self.assertIsNotNone(project_match)
         self.assertIsNotNone(app_match)
         self.assertEqual(project_match.group(1), app_match.group(1))
-        self.assertEqual(project_match.group(1), "0.8.9")
+        self.assertEqual(project_match.group(1), "0.9.1")
 
     def test_github_actions_use_existing_major_versions(self) -> None:
         ci = (self.root / ".github/workflows/ci.yml").read_text(encoding="utf-8")
@@ -64,12 +64,25 @@ class ReleasePackagingTests(unittest.TestCase):
         self.assertIn("SHA256SUMS", updater)
         self.assertIn("pkexec", updater)
 
+
+    def test_cloud_setup_files_are_in_release_installers_and_wheel_resources(self) -> None:
+        generic = (self.root / "packaging/build-generic.sh").read_text(encoding="utf-8")
+        pyproject = (self.root / "pyproject.toml").read_text(encoding="utf-8")
+        self.assertIn(".github supabase", generic)
+        self.assertTrue((self.root / "supabase/schema.sql").is_file())
+        self.assertTrue((self.root / "sesyjka/resources/supabase/schema.sql").is_file())
+        self.assertEqual(
+            (self.root / "supabase/schema.sql").read_bytes(),
+            (self.root / "sesyjka/resources/supabase/schema.sql").read_bytes(),
+        )
+        self.assertIn('"resources/supabase/*"', pyproject)
+
     def test_repository_metadata_points_to_result_repository(self) -> None:
         metainfo = (
             self.root / "data/io.github.zuraffpl.Sesyjka.metainfo.xml"
         ).read_text(encoding="utf-8")
         self.assertIn("https://github.com/Lioheart/Sesyjka", metainfo)
-        self.assertIn('<release version="0.8.9"', metainfo)
+        self.assertIn('<release version="0.9.1"', metainfo)
         self.assertNotIn("github.com/ZuraffPL/sesyjka", metainfo)
 
 

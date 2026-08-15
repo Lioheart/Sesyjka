@@ -1,10 +1,32 @@
-# Sesyjka GTK4 0.8.9
+# Sesyjka GTK4 0.9.1
 
 Natywna aplikacja dla Linuksa zbudowana w Pythonie, GTK4 i Libadwaita. Program kataloguje systemy RPG, podręczniki, suplementy, sesje, graczy, wydawców oraz gry planszowe i karciane.
 
 Repozytorium wynikowe: https://github.com/Lioheart/Sesyjka
 
 Projekt źródłowy i atrybucja: https://github.com/ZuraffPL/sesyjka
+
+## Sesyjka Cloud 0.9.1
+
+Sesyjka działa teraz w modelu **offline-first**. Wszystkie dotychczasowe bazy SQLite nadal są lokalnym źródłem danych i program działa bez Internetu. Osobna baza `sync.db` przechowuje wyłącznie stan synchronizacji, identyfikator urządzenia i konflikty. Nie dodaje żadnych kolumn ani tabel do `systemy_rpg.db`, `sesje_rpg.db`, `gracze.db`, `wydawcy.db` ani `planszowe.db`.
+
+Chmura korzysta z **Supabase Auth** oraz tabeli `sesyjka_records` chronionej przez Row Level Security. Aplikacja używa wyłącznie Project URL i klucza publishable/legacy anon. Klucz `secret` ani `service_role` nie może być umieszczany w kliencie desktopowym.
+
+Konfiguracja backendu wykonywana jest jeden raz przez administratora projektu Sesyjka:
+
+1. Utwórz projekt Supabase i w `Authentication -> Providers -> Discord` włącz Discord, wpisując Client ID i Client Secret z Discord Developer Portal.
+2. W Discord Developer Portal jako OAuth2 Redirect URI ustaw callback Supabase `https://<project-ref>.supabase.co/auth/v1/callback`.
+3. W `Authentication -> URL Configuration -> Redirect URLs` dodaj `http://127.0.0.1:8765/auth/callback`.
+4. W Supabase SQL Editor wykonaj plik `supabase/schema.sql`, który tworzy tabelę synchronizacji i polityki RLS.
+5. W Sesyjce kliknij `Cloud`, podaj Project URL i Publishable key, a następnie użyj `Zaloguj przez Discord`. Pierwsze logowanie tworzy konto automatycznie.
+
+Szczegółowa instrukcja znajduje się w `supabase/README.md`. Konfigurację można też przekazać przez `SESYJKA_SUPABASE_URL` i `SESYJKA_SUPABASE_KEY`.
+
+Synchronizacja działa ręcznie oraz automatycznie. Po lokalnej zmianie uruchamiana jest z krótkim opóźnieniem, a dodatkowo aplikacja wykonuje synchronizację okresową. Brak sieci nie blokuje CRUD. W nagłówku widoczny jest stan `Cloud`, godzina ostatniej synchronizacji albo liczba konfliktów.
+
+Jeżeli ten sam rekord zmienił się po obu stronach od ostatniej synchronizacji, Sesyjka nie nadpisuje go automatycznie. Okno konfliktów pokazuje lokalny i chmurowy JSON oraz pozwala jawnie wybrać `Zachowaj lokalne` albo `Zachowaj chmurę`. Usunięcia są synchronizowane jako tombstone, dlatego można propagować je między urządzeniami.
+
+Sesyjka nie otrzymuje ani nie zapisuje hasła Discord. Logowanie odbywa się w domyślnej przeglądarce w przepływie OAuth PKCE. Token odświeżania jest chroniony uprawnieniami pliku `0600`, ale w wersji 0.9.1 nie jest szyfrowany przez Sesyjkę. Nie kopiuj pliku sesji między użytkownikami ani urządzeniami. Token sesji jest przechowywany w `${XDG_CONFIG_HOME:-~/.config}/sesyjka/cloud-session.json` z prawami `0600`.
 
 ## Funkcje
 
@@ -23,6 +45,30 @@ Transfer danych obejmuje eksport ZIP, eksport do folderu, eksport XLSX, eksport 
 Formularz pozycji RPG ma dzielony układ. Około 60% szerokości zajmują pola edycji, a prawa część pokazuje dane znalezione dla ISBN: okładkę, tytuł, rok wydania, wydawcę i ewentualną informacyjną cenę online. Metadane są pobierane na żądanie oraz automatycznie przy otwarciu rekordu z zapisanym ISBN. Puste pola nazwy i roku są uzupełniane automatycznie. Jeżeli wydawca znaleziony online już istnieje w `wydawcy.db`, może zostać automatycznie dopasowany. Istniejące wartości można zastąpić przyciskiem `Użyj danych z ISBN`. Jeśli lokalna cena nie jest podana, dostępna cena z Google Books może zostać pokazana i ręcznie zastosowana do wybranego formatu. Cena Google Books może dotyczyć e-booka i jest jawnie oznaczana jako informacyjna.
 
 Wyszukiwanie ISBN korzysta z publicznego API Biblioteki Narodowej, Open Library oraz Google Books. ISBN jest normalizowany przed wyszukiwaniem, dlatego myślniki i spacje nie mają wpływu na wynik. Program wylicza również odpowiadający ISBN-10 lub ISBN-13 i próbuje oba identyfikatory. Google Books jest przeszukiwane kolejno po `isbn:`, po samym numerze oraz, gdy katalog biblioteczny dostarczy tytuł, także po tytule i wydawcy. Okładki są pobierane z wielu kandydatów. Jeżeli API Google nie zwraca `imageLinks`, program próbuje front cover po identyfikatorze woluminu Google Books. Okładki są zapisywane w `${XDG_CACHE_HOME:-~/.cache}/sesyjka/covers/`, a metadane i informacja o zakończonej próbie pobrania okładki w `${XDG_CACHE_HOME:-~/.cache}/sesyjka/books/`. Automatyczne otwarcie rekordu najpierw korzysta z tego cache. Przycisk `Pobierz z ISBN` wymusza odświeżenie z internetu. Opcjonalnie można ustawić `SESYJKA_GOOGLE_BOOKS_API_KEY`.
+
+## Zmiany w 0.9.1
+
+- usunięto z GUI rejestrację i logowanie e-mail + hasło do Sesyjka Cloud
+- dodano logowanie przez konto Discord za pośrednictwem Supabase Auth
+- zastosowano OAuth Authorization Code + PKCE z `S256`
+- callback aplikacji nasłuchuje wyłącznie na `127.0.0.1:8765` i jest zamykany po logowaniu lub przekroczeniu limitu czasu
+- pierwsze logowanie Discord automatycznie tworzy użytkownika Supabase Auth
+- po poprawnym logowaniu synchronizacja lokalna/chmurowa uruchamia się automatycznie
+- dodano czytelny komunikat, gdy backend nie ma wdrożonej tabeli `public.sesyjka_records`
+- nie zmieniono schematów pięciu baz danych z danymi użytkownika
+
+## Zmiany w 0.9.0
+
+- dodano osobną bazę `sync.db` bez modyfikowania schematów istniejących baz danych
+- dodano konta użytkowników przez Supabase Auth, rejestrację e-mail + hasło, logowanie, odświeżanie sesji i wylogowanie
+- dodano synchronizację lokalnych rekordów z Supabase Data REST API w modelu offline-first
+- synchronizacja działa ręcznie, przy starcie, okresowo oraz po lokalnych operacjach CRUD z opóźnieniem debounce
+- dodano status Cloud w nagłówku aplikacji z informacją o logowaniu, trybie offline, czasie ostatniej synchronizacji i konfliktach
+- dodano jawne konflikty, porównanie lokalnej i chmurowej wersji rekordu oraz wybór wersji do zachowania
+- usunięcia są propagowane jako tombstone zamiast bezpowrotnego kasowania rekordu chmurowego
+- dodano gotowy `supabase/schema.sql` z RLS ograniczającym rekordy do `auth.uid()` zalogowanego użytkownika
+- tytuł `Sesyjka` w nagłówku jest większy
+- nie zmieniono schematu żadnej z pięciu baz danych z danymi użytkownika
 
 ## Zmiany w 0.8.9
 
@@ -113,9 +159,15 @@ wydawcy.db
 planszowe.db
 ```
 
+Stan chmury jest przechowywany osobno:
+
+```text
+sync.db
+```
+
 Pierwsze cztery pliki zachowują schematy zgodne z projektem `ZuraffPL/sesyjka`. Nowa funkcja planszówek nie dodaje tabel ani kolumn do tych baz. Jest przechowywana wyłącznie w `planszowe.db`.
 
-Import i tryb gościa nadal akceptują zestaw zawierający tylko cztery oryginalne bazy. W takim przypadku zakładka gier planszowych pozostaje pusta. Eksport tworzony przez wersję 0.8.9 zawiera pięć baz.
+Import i tryb gościa nadal akceptują zestaw zawierający tylko cztery oryginalne bazy. W takim przypadku zakładka gier planszowych pozostaje pusta. Eksport tworzony przez wersję 0.9.1 zawiera pięć baz danych użytkownika. `sync.db` nie jest eksportowany, ponieważ zawiera stan konkretnego konta i urządzenia.
 
 Log diagnostyczny:
 

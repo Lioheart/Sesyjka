@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import logging
+import os
 import threading
 import time
 from pathlib import Path
@@ -12,6 +14,8 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
 from . import APP_ID, APP_NAME, APP_VERSION, UPDATE_REPOSITORY
+from .cloud import CloudAuthError, CloudError, CloudOfflineError, CloudService, Conflict, DEFAULT_SYNC_INTERVAL
+from .oauth import OAUTH_CALLBACK_HOST, OAUTH_CALLBACK_PATH, OAUTH_CALLBACK_PORT
 from .config import load_settings, migrate_legacy_databases, save_settings
 from .database_manager import DatabaseManager
 from .dialogs import ModalWindow, info
@@ -138,6 +142,26 @@ BASE_CSS = """
   border-radius: 10px;
   background-color: @view_bg_color;
 }
+.app-main-title {
+  font-size: 22px;
+  font-weight: 800;
+}
+.app-main-subtitle {
+  font-size: 12px;
+  opacity: 0.72;
+}
+.cloud-status-label {
+  font-size: 12px;
+}
+.cloud-status-error {
+  color: @error_color;
+}
+.cloud-status-warning {
+  color: @warning_color;
+}
+.cloud-status-ok {
+  color: @success_color;
+}
 .statistics-table-separator {
   min-width: 1px;
   margin-left: 6px;
@@ -160,19 +184,28 @@ class SesyjkaWindow(Adw.ApplicationWindow):
             self.maximize()
         self.databases = databases
         self.repository = Repository(databases)
+        self.cloud = CloudService(databases)
         self._font_provider = None
         self.style_manager = Adw.StyleManager.get_default()
         self._update_check_in_progress = False
+        self._cloud_sync_in_progress = False
+        self._cloud_debounce_source: int | None = None
+        self._cloud_last_error = ""
+        self._cloud_last_error_kind = ""
+        self._cloud_last_attempt = 0
         self.connect("close-request", self.on_close_request)
         self.set_icon_name(APP_ID)
 
         self.header = Adw.HeaderBar()
-        if hasattr(Adw, "WindowTitle"):
-            title = Adw.WindowTitle(title=APP_NAME, subtitle="Kolekcja RPG, sesje i gry planszowe")
-        else:
-            title = Gtk.Label(label=APP_NAME)
-            title.add_css_class("title")
-        self.header.set_title_widget(title)
+        title_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        title_box.set_halign(Gtk.Align.CENTER)
+        title = Gtk.Label(label=APP_NAME)
+        title.add_css_class("app-main-title")
+        subtitle = Gtk.Label(label="Kolekcja RPG, sesje i gry planszowe")
+        subtitle.add_css_class("app-main-subtitle")
+        title_box.append(title)
+        title_box.append(subtitle)
+        self.header.set_title_widget(title_box)
 
         transfer_button = Gtk.Button.new_from_icon_name("document-save-symbolic")
         transfer_button.set_tooltip_text("Bazy danych")
@@ -211,6 +244,24 @@ class SesyjkaWindow(Adw.ApplicationWindow):
         theme_box.append(self.theme_icon)
         theme_box.append(self.dark_switch)
         self.header.pack_end(theme_box)
+
+        self.cloud_button = Gtk.Button()
+        cloud_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        cloud_icon_name = "network-server-symbolic"
+        cloud_display = Gdk.Display.get_default()
+        if cloud_display is not None:
+            cloud_theme = Gtk.IconTheme.get_for_display(cloud_display)
+            if not cloud_theme.has_icon(cloud_icon_name):
+                cloud_icon_name = "view-refresh-symbolic"
+        self.cloud_icon = Gtk.Image.new_from_icon_name(cloud_icon_name)
+        self.cloud_status_label = Gtk.Label(label="Cloud: wyłączona")
+        self.cloud_status_label.add_css_class("cloud-status-label")
+        cloud_box.append(self.cloud_icon)
+        cloud_box.append(self.cloud_status_label)
+        self.cloud_button.set_child(cloud_box)
+        self.cloud_button.set_tooltip_text("Sesyjka Cloud: konto i synchronizacja")
+        self.cloud_button.connect("clicked", lambda _button: self.show_cloud())
+        self.header.pack_end(self.cloud_button)
 
         update_icon_name = "software-update-available-symbolic"
         display = Gdk.Display.get_default()
@@ -300,6 +351,9 @@ class SesyjkaWindow(Adw.ApplicationWindow):
         self.apply_font_scale(float(self.settings_data.get("font_scale", 1.0)))
         self.update_guest_state()
         self.refresh_all()
+        self._update_cloud_status()
+        GLib.timeout_add_seconds(3, self._startup_cloud_sync)
+        GLib.timeout_add_seconds(30, self._cloud_periodic_tick)
         GLib.timeout_add_seconds(4, self._startup_update_check)
 
     def apply_dark_mode(self, enabled: bool) -> None:
@@ -346,6 +400,7 @@ class SesyjkaWindow(Adw.ApplicationWindow):
             page = self.pages[key]
             if page is not visible:
                 page.refresh()
+        self._schedule_cloud_sync_after_local_change()
 
     def update_guest_state(self) -> None:
         guest = self.databases.guest_mode
@@ -355,6 +410,8 @@ class SesyjkaWindow(Adw.ApplicationWindow):
         for page in self.pages.values():
             page.set_read_only(guest)
         self.refresh_all()
+        if hasattr(self, "cloud_status_label"):
+            self._update_cloud_status()
 
     def _current_settings(self) -> dict[str, object]:
         settings: dict[str, object] = dict(self.settings_data)
@@ -375,6 +432,511 @@ class SesyjkaWindow(Adw.ApplicationWindow):
             save_settings(self.settings_data)
         except OSError:
             LOG.exception("Nie udało się zapisać ustawień")
+
+    def _cloud_config_values(self) -> tuple[str, str]:
+        url = os.environ.get("SESYJKA_SUPABASE_URL") or str(self.settings_data.get("cloud_supabase_url", ""))
+        key = os.environ.get("SESYJKA_SUPABASE_KEY") or str(self.settings_data.get("cloud_publishable_key", ""))
+        return url.strip(), key.strip()
+
+    def _cloud_configured(self) -> bool:
+        url, key = self._cloud_config_values()
+        return bool(url and key)
+
+    def _cloud_auto_enabled(self) -> bool:
+        return bool(self.settings_data.get("cloud_auto_sync", True))
+
+    def _cloud_interval(self) -> int:
+        try:
+            value = int(self.settings_data.get("cloud_sync_interval", DEFAULT_SYNC_INTERVAL))
+        except (TypeError, ValueError):
+            value = DEFAULT_SYNC_INTERVAL
+        return min(3600, max(60, value))
+
+    def _set_cloud_status(self, text: str, state: str = "neutral") -> None:
+        self.cloud_status_label.set_text(text)
+        for css_class in ("cloud-status-error", "cloud-status-warning", "cloud-status-ok"):
+            self.cloud_status_label.remove_css_class(css_class)
+        if state == "error":
+            self.cloud_status_label.add_css_class("cloud-status-error")
+        elif state == "warning":
+            self.cloud_status_label.add_css_class("cloud-status-warning")
+        elif state == "ok":
+            self.cloud_status_label.add_css_class("cloud-status-ok")
+
+    def _update_cloud_status(self) -> None:
+        if self.databases.guest_mode:
+            self._set_cloud_status("Cloud: gość", "warning")
+            self.cloud_button.set_tooltip_text("Synchronizacja jest wyłączona w trybie gościa")
+            return
+        if not self._cloud_configured():
+            self._set_cloud_status("Cloud: skonfiguruj")
+            self.cloud_button.set_tooltip_text("Skonfiguruj projekt Supabase i konto Sesyjka Cloud")
+            return
+        if not self.cloud.signed_in:
+            self._set_cloud_status("Cloud: zaloguj")
+            self.cloud_button.set_tooltip_text("Zaloguj się do Sesyjka Cloud")
+            return
+        conflicts = len(self.cloud.conflicts)
+        if conflicts:
+            self._set_cloud_status(f"Cloud: konflikty {conflicts}", "warning")
+            self.cloud_button.set_tooltip_text("Sesyjka Cloud wymaga rozwiązania konfliktów")
+            return
+        if self._cloud_sync_in_progress:
+            self._set_cloud_status("Cloud: synchronizacja…")
+            self.cloud_button.set_tooltip_text("Trwa synchronizacja z Supabase")
+            return
+        if self._cloud_last_error:
+            if self._cloud_last_error_kind == "offline":
+                self._set_cloud_status("Cloud: offline", "warning")
+            else:
+                self._set_cloud_status("Cloud: błąd", "error")
+            self.cloud_button.set_tooltip_text(self._cloud_last_error)
+            return
+        last_sync = int(self.cloud.store.get_meta("last_sync_at") or 0)
+        if last_sync:
+            timestamp = time.strftime("%H:%M", time.localtime(last_sync))
+            self._set_cloud_status(f"Cloud: ✓ {timestamp}", "ok")
+            email = self.cloud.session.email if self.cloud.session else ""
+            self.cloud_button.set_tooltip_text(f"Zsynchronizowano o {timestamp}" + (f" · {email}" if email else ""))
+        else:
+            self._set_cloud_status("Cloud: gotowa", "ok")
+            self.cloud_button.set_tooltip_text("Konto połączone. Dane oczekują na pierwszą synchronizację.")
+
+    def _startup_cloud_sync(self) -> bool:
+        if self._cloud_configured() and self.cloud.signed_in and self._cloud_auto_enabled() and not self.databases.guest_mode:
+            self.trigger_cloud_sync(manual=False)
+        else:
+            self._update_cloud_status()
+        return False
+
+    def _cloud_periodic_tick(self) -> bool:
+        self._update_cloud_status()
+        if (
+            self._cloud_configured()
+            and self.cloud.signed_in
+            and self._cloud_auto_enabled()
+            and not self.databases.guest_mode
+            and not self._cloud_sync_in_progress
+        ):
+            last_sync = int(self.cloud.store.get_meta("last_sync_at") or 0)
+            reference = max(last_sync, self._cloud_last_attempt)
+            if int(time.time()) - reference >= self._cloud_interval():
+                self.trigger_cloud_sync(manual=False)
+        return True
+
+    def _schedule_cloud_sync_after_local_change(self) -> None:
+        if not (
+            self._cloud_configured()
+            and self.cloud.signed_in
+            and self._cloud_auto_enabled()
+            and not self.databases.guest_mode
+        ):
+            return
+        if self._cloud_debounce_source is not None:
+            GLib.source_remove(self._cloud_debounce_source)
+        self._cloud_debounce_source = GLib.timeout_add_seconds(5, self._run_debounced_cloud_sync)
+
+    def _run_debounced_cloud_sync(self) -> bool:
+        self._cloud_debounce_source = None
+        self.trigger_cloud_sync(manual=False)
+        return False
+
+    def trigger_cloud_sync(self, manual: bool = False) -> None:
+        if self.databases.guest_mode:
+            if manual:
+                info(self, "Sesyjka Cloud", "Synchronizacja jest wyłączona w trybie gościa.")
+            return
+        if not self._cloud_configured():
+            if manual:
+                self.show_cloud()
+            return
+        if not self.cloud.signed_in:
+            if manual:
+                self.show_cloud()
+            return
+        if self._cloud_sync_in_progress:
+            if manual:
+                info(self, "Sesyjka Cloud", "Synchronizacja już trwa.")
+            return
+        self._cloud_sync_in_progress = True
+        self._cloud_last_attempt = int(time.time())
+        self._cloud_last_error = ""
+        self._cloud_last_error_kind = ""
+        self._update_cloud_status()
+        url, key = self._cloud_config_values()
+
+        def worker() -> None:
+            report = None
+            error: Exception | None = None
+            try:
+                report = self.cloud.sync(url, key)
+            except Exception as exc:
+                error = exc
+            GLib.idle_add(self._finish_cloud_sync, report, error, manual)
+
+        threading.Thread(target=worker, name="sesyjka-cloud-sync", daemon=True).start()
+
+    def _finish_cloud_sync(self, report: object, error: Exception | None, manual: bool) -> bool:
+        self._cloud_sync_in_progress = False
+        if error is not None:
+            LOG.warning("Synchronizacja Sesyjka Cloud nie powiodła się: %s", error)
+            self._cloud_last_error = str(error)
+            self._cloud_last_error_kind = "offline" if isinstance(error, CloudOfflineError) else "error"
+            self._update_cloud_status()
+            if manual:
+                info(self, "Błąd synchronizacji", str(error), error=True)
+            return False
+        self._cloud_last_error = ""
+        self._cloud_last_error_kind = ""
+        self.refresh_all()
+        self._update_cloud_status()
+        if manual and report is not None:
+            uploaded = int(getattr(report, "uploaded", 0))
+            downloaded = int(getattr(report, "downloaded", 0))
+            deleted_local = int(getattr(report, "deleted_local", 0))
+            deleted_remote = int(getattr(report, "deleted_remote", 0))
+            conflicts = int(getattr(report, "conflicts", 0))
+            message = (
+                f"Wysłano: {uploaded}\n"
+                f"Pobrano: {downloaded}\n"
+                f"Usunięto lokalnie: {deleted_local}\n"
+                f"Usunięto w chmurze: {deleted_remote}\n"
+                f"Konflikty: {conflicts}"
+            )
+            info(self, "Synchronizacja zakończona", message)
+        return False
+
+    def show_cloud(self) -> None:
+        dialog = ModalWindow(self, "Sesyjka Cloud", width=760, height=680)
+        heading = Gtk.Label(label="Sesyjka Cloud")
+        heading.add_css_class("title-1")
+        heading.set_halign(Gtk.Align.START)
+        description = Gtk.Label(
+            label=(
+                "Sesyjka Cloud używa konta Discord do logowania przez Supabase Auth. "
+                "Program pozostaje w pełni użyteczny bez Internetu, a sync.db przechowuje "
+                "wyłącznie stan synchronizacji i konflikty."
+            ),
+            wrap=True,
+            xalign=0.0,
+        )
+        dialog.root_box.append(heading)
+        dialog.root_box.append(description)
+
+        config_frame = Gtk.Frame(label="Połączenie Supabase")
+        config_grid = Gtk.Grid(column_spacing=10, row_spacing=10)
+        config_grid.set_margin_top(12)
+        config_grid.set_margin_bottom(12)
+        config_grid.set_margin_start(12)
+        config_grid.set_margin_end(12)
+        url_entry = Gtk.Entry()
+        url_entry.set_hexpand(True)
+        url_entry.set_placeholder_text("https://<project-ref>.supabase.co")
+        key_entry = Gtk.Entry()
+        key_entry.set_hexpand(True)
+        key_entry.set_placeholder_text("Publishable key")
+        current_url, current_key = self._cloud_config_values()
+        url_entry.set_text(current_url)
+        key_entry.set_text(current_key)
+        config_grid.attach(Gtk.Label(label="Project URL", xalign=0.0), 0, 0, 1, 1)
+        config_grid.attach(url_entry, 1, 0, 1, 1)
+        config_grid.attach(Gtk.Label(label="Publishable key", xalign=0.0), 0, 1, 1, 1)
+        config_grid.attach(key_entry, 1, 1, 1, 1)
+        callback_uri = f"http://{OAUTH_CALLBACK_HOST}:{OAUTH_CALLBACK_PORT}{OAUTH_CALLBACK_PATH}"
+        callback_label = Gtk.Label(label=callback_uri, xalign=0.0, selectable=True)
+        callback_label.add_css_class("dim-label")
+        config_grid.attach(Gtk.Label(label="Redirect URL", xalign=0.0), 0, 2, 1, 1)
+        config_grid.attach(callback_label, 1, 2, 1, 1)
+        save_config = Gtk.Button(label="Zapisz konfigurację")
+        save_config.set_halign(Gtk.Align.END)
+        config_grid.attach(save_config, 1, 3, 1, 1)
+        config_frame.set_child(config_grid)
+        dialog.root_box.append(config_frame)
+
+        account_frame = Gtk.Frame(label="Konto użytkownika")
+        account_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        account_box.set_margin_top(12)
+        account_box.set_margin_bottom(12)
+        account_box.set_margin_start(12)
+        account_box.set_margin_end(12)
+        dialog.root_box.append(account_frame)
+        account_frame.set_child(account_box)
+
+        status = Gtk.Label(wrap=True, xalign=0.0)
+        account_box.append(status)
+
+        def persist_config(_button: Gtk.Button | None = None) -> bool:
+            try:
+                from .cloud import CloudConfig
+                config = CloudConfig.from_values(url_entry.get_text(), key_entry.get_text())
+            except ValueError as exc:
+                status.set_text(str(exc))
+                status.add_css_class("error")
+                return False
+            previous_url, previous_key = self._cloud_config_values()
+            if self.cloud.signed_in and (config.url != previous_url or config.publishable_key != previous_key):
+                status.set_text("Wyloguj się przed zmianą projektu Supabase lub klucza publishable.")
+                status.add_css_class("error")
+                return False
+            status.remove_css_class("error")
+            self.settings_data["cloud_supabase_url"] = config.url
+            self.settings_data["cloud_publishable_key"] = config.publishable_key
+            self._save_current_settings()
+            self._cloud_last_error = ""
+            self._cloud_last_error_kind = ""
+            self._update_cloud_status()
+            status.set_text("Konfiguracja Supabase została zapisana.")
+            return True
+
+        save_config.connect("clicked", persist_config)
+
+        if not self.cloud.signed_in:
+            login_info = Gtk.Label(
+                label=(
+                    "Kliknij poniżej, aby zalogować się przez Discord w domyślnej przeglądarce. "
+                    "Pierwsze logowanie automatycznie tworzy konto w Supabase Auth. "
+                    "Po autoryzacji synchronizacja rozpocznie się automatycznie."
+                ),
+                wrap=True,
+                xalign=0.0,
+            )
+            account_box.append(login_info)
+            signin = Gtk.Button(label="Zaloguj przez Discord")
+            signin.add_css_class("suggested-action")
+            signin.set_halign(Gtk.Align.END)
+            account_box.append(signin)
+
+            def auth_discord(_button: Gtk.Button) -> None:
+                if not persist_config():
+                    return
+                signin.set_sensitive(False)
+                status.remove_css_class("error")
+                status.set_text("Otwieranie Discord w przeglądarce. Po zalogowaniu wróć do Sesyjki…")
+                url, key = self._cloud_config_values()
+
+                def worker() -> None:
+                    result: object = None
+                    error: Exception | None = None
+                    try:
+                        result = self.cloud.sign_in_with_discord(url, key)
+                    except Exception as exc:
+                        error = exc
+                    GLib.idle_add(finish_discord_auth, result, error)
+
+                threading.Thread(target=worker, name="sesyjka-cloud-discord-auth", daemon=True).start()
+
+            def finish_discord_auth(result: object, error: Exception | None) -> bool:
+                signin.set_sensitive(True)
+                if error is not None:
+                    status.set_text(str(error))
+                    status.add_css_class("error")
+                    self._cloud_last_error = str(error)
+                    self._cloud_last_error_kind = "offline" if isinstance(error, CloudOfflineError) else "error"
+                    self._update_cloud_status()
+                    return False
+                status.remove_css_class("error")
+                session = result if hasattr(result, "user_id") else self.cloud.session
+                identity = getattr(session, "email", "") or getattr(session, "user_id", "")
+                status.set_text(f"Zalogowano przez Discord: {identity}")
+                self._cloud_last_error = ""
+                self._cloud_last_error_kind = ""
+                self._update_cloud_status()
+                dialog.close()
+                self.trigger_cloud_sync(manual=False)
+                return False
+
+            signin.connect("clicked", auth_discord)
+        else:
+            session = self.cloud.session
+            provider_name = "Discord" if session.provider == "discord" else (session.provider.capitalize() if session.provider else "Sesyjka Cloud")
+            account_box.append(
+                Gtk.Label(
+                    label=f"Zalogowano przez {provider_name}: {session.email or session.user_id}",
+                    xalign=0.0,
+                )
+            )
+            account_box.append(Gtk.Label(label=f"Urządzenie: {self.cloud.store.device_id}", xalign=0.0, selectable=True))
+            last_sync = int(self.cloud.store.get_meta("last_sync_at") or 0)
+            last_text = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(last_sync)) if last_sync else "jeszcze nie wykonano"
+            account_box.append(Gtk.Label(label=f"Ostatnia synchronizacja: {last_text}", xalign=0.0))
+
+            auto_sync = Gtk.CheckButton(label="Automatycznie synchronizuj po zmianach i okresowo")
+            auto_sync.set_active(self._cloud_auto_enabled())
+            account_box.append(auto_sync)
+            interval_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            interval_box.append(Gtk.Label(label="Interwał synchronizacji:"))
+            interval = Gtk.SpinButton.new_with_range(1, 60, 1)
+            interval.set_value(self._cloud_interval() / 60)
+            interval_box.append(interval)
+            interval_box.append(Gtk.Label(label="min"))
+            account_box.append(interval_box)
+
+            def update_sync_preferences(*_args: object) -> None:
+                self.settings_data["cloud_auto_sync"] = auto_sync.get_active()
+                self.settings_data["cloud_sync_interval"] = int(interval.get_value()) * 60
+                self._save_current_settings()
+
+            auto_sync.connect("toggled", update_sync_preferences)
+            interval.connect("value-changed", update_sync_preferences)
+
+            conflict_count = len(self.cloud.conflicts)
+            action_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            action_box.set_halign(Gtk.Align.END)
+            conflicts = Gtk.Button(label=f"Konflikty ({conflict_count})")
+            conflicts.set_sensitive(conflict_count > 0)
+            sync = Gtk.Button(label="Synchronizuj teraz")
+            sync.add_css_class("suggested-action")
+            logout = Gtk.Button(label="Wyloguj")
+            action_box.append(conflicts)
+            action_box.append(logout)
+            action_box.append(sync)
+            account_box.append(action_box)
+            sync.connect("clicked", lambda _button: (dialog.close(), self.trigger_cloud_sync(manual=True)))
+            conflicts.connect("clicked", lambda _button: (dialog.close(), self.show_cloud_conflicts()))
+
+            def logout_clicked(_button: Gtk.Button) -> None:
+                if not persist_config():
+                    return
+                url, key = self._cloud_config_values()
+                logout.set_sensitive(False)
+                status.set_text("Wylogowywanie…")
+
+                def worker() -> None:
+                    error: Exception | None = None
+                    try:
+                        self.cloud.sign_out(url, key)
+                    except Exception as exc:
+                        error = exc
+                    GLib.idle_add(finish_logout, error)
+
+                threading.Thread(target=worker, name="sesyjka-cloud-logout", daemon=True).start()
+
+            def finish_logout(error: Exception | None) -> bool:
+                if error:
+                    LOG.warning("Wylogowanie chmurowe: %s", error)
+                self._cloud_last_error = ""
+                self._cloud_last_error_kind = ""
+                self._update_cloud_status()
+                dialog.close()
+                return False
+
+            logout.connect("clicked", logout_clicked)
+
+        footer = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        footer.set_halign(Gtk.Align.END)
+        close = Gtk.Button(label="Zamknij")
+        close.connect("clicked", lambda _button: dialog.close())
+        footer.append(close)
+        dialog.root_box.append(footer)
+        dialog.present()
+
+    def show_cloud_conflicts(self) -> None:
+        conflicts = self.cloud.conflicts
+        if not conflicts:
+            info(self, "Konflikty synchronizacji", "Nie ma nierozwiązanych konfliktów.")
+            return
+        dialog = ModalWindow(self, "Konflikty synchronizacji", width=1040, height=760)
+        intro = Gtk.Label(
+            label=(
+                "Ten sam rekord został zmieniony lokalnie i w chmurze od ostatniej synchronizacji. "
+                "Wybierz wersję, która ma zostać zachowana. Decyzja jest wykonywana osobno dla każdego rekordu."
+            ),
+            wrap=True,
+            xalign=0.0,
+        )
+        dialog.root_box.append(intro)
+        list_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        for conflict in conflicts:
+            expander = Gtk.Expander(label=self._conflict_title(conflict))
+            content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+            compare = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+            local_panel = self._conflict_payload_panel("Lokalne", conflict.local_payload, conflict.local_deleted)
+            remote_panel = self._conflict_payload_panel("Chmura", conflict.remote_payload, conflict.remote_deleted)
+            compare.append(local_panel)
+            compare.append(remote_panel)
+            content.append(compare)
+            actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            actions.set_halign(Gtk.Align.END)
+            keep_local = Gtk.Button(label="Zachowaj lokalne")
+            keep_cloud = Gtk.Button(label="Zachowaj chmurę")
+            keep_cloud.add_css_class("suggested-action")
+            keep_local.connect("clicked", lambda _button, cid=conflict.id: self._resolve_cloud_conflict(cid, "local", dialog))
+            keep_cloud.connect("clicked", lambda _button, cid=conflict.id: self._resolve_cloud_conflict(cid, "remote", dialog))
+            actions.append(keep_local)
+            actions.append(keep_cloud)
+            content.append(actions)
+            expander.set_child(content)
+            list_box.append(expander)
+        dialog.add_scrolled_content(list_box)
+        close = Gtk.Button(label="Zamknij")
+        close.set_halign(Gtk.Align.END)
+        close.connect("clicked", lambda _button: dialog.close())
+        dialog.root_box.append(close)
+        dialog.present()
+
+    def _conflict_title(self, conflict: Conflict) -> str:
+        names = {
+            "publishers": "Wydawca",
+            "players": "Gracz",
+            "game_systems": "System RPG",
+            "rpg_items": "Pozycja RPG",
+            "sessions": "Sesja",
+            "session_players": "Uczestnik sesji",
+            "session_notes": "Notatka sesji",
+            "board_games": "Gra planszowa/karciana",
+        }
+        label = names.get(conflict.entity_type, conflict.entity_type)
+        local_name = (conflict.local_payload or {}).get("nazwa") or (conflict.local_payload or {}).get("nick")
+        remote_name = (conflict.remote_payload or {}).get("nazwa") or (conflict.remote_payload or {}).get("nick")
+        detail = local_name or remote_name or conflict.record_key
+        return f"{label}: {detail}"
+
+    def _conflict_payload_panel(self, title: str, payload: dict[str, object] | None, deleted: bool) -> Gtk.Widget:
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        box.set_hexpand(True)
+        label = Gtk.Label(label=title, xalign=0.0)
+        label.add_css_class("heading")
+        box.append(label)
+        text = "(rekord usunięty)" if deleted else json.dumps(payload or {}, ensure_ascii=False, indent=2, sort_keys=True)
+        view = Gtk.TextView()
+        view.set_editable(False)
+        view.set_monospace(True)
+        view.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+        view.get_buffer().set_text(text)
+        scroller = Gtk.ScrolledWindow()
+        scroller.set_min_content_height(240)
+        scroller.set_hexpand(True)
+        scroller.set_child(view)
+        box.append(scroller)
+        return box
+
+    def _resolve_cloud_conflict(self, conflict_id: int, resolution: str, dialog: Gtk.Window) -> None:
+        url, key = self._cloud_config_values()
+        dialog.set_sensitive(False)
+
+        def worker() -> None:
+            error: Exception | None = None
+            try:
+                self.cloud.resolve_conflict(url, key, conflict_id, resolution)
+            except Exception as exc:
+                error = exc
+            GLib.idle_add(finish, error)
+
+        def finish(error: Exception | None) -> bool:
+            dialog.set_sensitive(True)
+            if error:
+                info(self, "Błąd konfliktu", str(error), error=True)
+                return False
+            dialog.close()
+            self.refresh_all()
+            self._update_cloud_status()
+            if self.cloud.conflicts:
+                self.show_cloud_conflicts()
+            else:
+                self.trigger_cloud_sync(manual=False)
+            return False
+
+        threading.Thread(target=worker, name="sesyjka-cloud-conflict", daemon=True).start()
 
     def _startup_update_check(self) -> bool:
         if not bool(self.settings_data.get("check_updates", True)):
@@ -573,12 +1135,17 @@ class SesyjkaWindow(Adw.ApplicationWindow):
             "SKRÓTY\n"
             "Ctrl+N dodaje rekord w aktywnej zakładce. Ctrl+R odświeża dane. Ctrl+Q zamyka program. "
             "Dwuklik edytuje rekord, a prawy przycisk myszy otwiera menu kontekstowe.\n\n"
+            "SESYJKA CLOUD\n"
+            "Przycisk Cloud w nagłówku otwiera konfigurację backendu, logowanie przez Discord, ręczną synchronizację i konflikty. "
+            "Dane są nadal zapisywane najpierw lokalnie, więc brak Internetu nie blokuje pracy. Automatyczna synchronizacja "
+            "uruchamia się po zmianach i okresowo. Stan mapowań jest przechowywany w osobnej bazie sync.db.\n\n"
             "AKTUALIZACJE\n"
             "Program sprawdza najnowsze wydanie GitHub podczas uruchamiania, nie częściej niż co 6 godzin. "
             "Przycisk aktualizacji w nagłówku uruchamia kontrolę ręczną. Pakiety DEB, RPM i instalacja ogólna "
             "mogą zostać zaktualizowane po potwierdzeniu uprawnień administratora.\n\n"
             "DANE\n"
-            f"Bazy użytkownika: {self.databases.own_root}"
+            f"Bazy użytkownika: {self.databases.own_root}\n"
+            f"Stan synchronizacji: {self.databases.own_root / 'sync.db'}"
         )
         label = Gtk.Label(label=help_text, wrap=True, selectable=True, xalign=0.0, yalign=0.0)
         label.set_max_width_chars(90)
@@ -592,6 +1159,10 @@ class SesyjkaWindow(Adw.ApplicationWindow):
     def show_history(self) -> None:
         dialog = ModalWindow(self, "Historia zmian", width=720, height=620)
         history_text = (
+            "0.9.1\n"
+            "Logowanie Sesyjka Cloud odbywa się przez konto Discord w bezpiecznym przepływie OAuth PKCE. Po poprawnej autoryzacji synchronizacja uruchamia się automatycznie. Dodano lokalny callback tylko na 127.0.0.1 oraz czytelniejszy komunikat dla niewdrożonego backendu Supabase.\n\n"
+            "0.9.0\n"
+            "Dodano Sesyjka Cloud: konta Supabase Auth, osobną bazę sync.db, synchronizację lokalnych baz SQLite z chmurą bez zmian ich schematów, pracę offline, automatyczne i ręczne synchronizowanie, widoczny status w nagłówku oraz ręczne rozwiązywanie konfliktów. Powiększono również tytuł aplikacji.\n\n"
             "0.8.9\n"
             "Dodano trwały cache metadanych ISBN i informacji o braku okładki, dzięki czemu ponowne otwarcie formularza nie wykonuje kolejnych zapytań sieciowych. "
             "Przycisk Pobierz z ISBN wymusza ręczne odświeżenie danych. Dodano wewnętrzny padding formularza, krótki opis aplikacji w nagłówku oraz bezpieczny fallback ikony aktualizacji.\n\n"
@@ -653,7 +1224,8 @@ class SesyjkaWindow(Adw.ApplicationWindow):
             label=(
                 "Natywna aplikacja GTK4 i Libadwaita dla Linuksa do zarządzania kolekcją systemów RPG, "
                 "sesjami, graczami, wydawcami oraz grami planszowymi i karcianymi. "
-                "Cztery bazy projektu źródłowego pozostają zgodne, a planszowe.db jest niezależnym rozszerzeniem."
+                "Cztery bazy projektu źródłowego pozostają zgodne, planszowe.db jest niezależnym rozszerzeniem, "
+                "a sync.db przechowuje wyłącznie stan opcjonalnej synchronizacji Sesyjka Cloud."
             ),
             wrap=True,
             xalign=0.0,

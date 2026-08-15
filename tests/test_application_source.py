@@ -182,6 +182,20 @@ class ApplicationSourceTests(unittest.TestCase):
         self.assertEqual({path.name for path in screenshot_dir.glob("*.png")}, expected)
         self.assertTrue(all((screenshot_dir / name).stat().st_size > 0 for name in expected))
 
+    def test_cloud_login_uses_discord_oauth_pkce_instead_of_password_form(self) -> None:
+        app = (self.root / "sesyjka" / "app.py").read_text(encoding="utf-8")
+        cloud = (self.root / "sesyjka" / "cloud.py").read_text(encoding="utf-8")
+        oauth = (self.root / "sesyjka" / "oauth.py").read_text(encoding="utf-8")
+        self.assertIn('Gtk.Button(label="Zaloguj przez Discord")', app)
+        self.assertNotIn('Gtk.Label(label="Hasło"', app)
+        self.assertNotIn('Gtk.Button(label="Utwórz konto")', app)
+        self.assertIn("sign_in_with_discord", cloud)
+        self.assertIn('grant_type=pkce', cloud)
+        self.assertIn('"provider": "discord"', oauth)
+        self.assertIn('"code_challenge_method": "s256"', oauth)
+        self.assertIn('OAUTH_CALLBACK_HOST = "127.0.0.1"', oauth)
+        self.assertIn('OAUTH_CALLBACK_PORT = 8765', oauth)
+
     def test_source_project_basics_are_exposed(self) -> None:
         app = (self.root / "sesyjka" / "app.py").read_text(encoding="utf-8")
         sessions = (self.root / "sesyjka" / "pages" / "sessions.py").read_text(
@@ -357,9 +371,33 @@ class ApplicationSourceTests(unittest.TestCase):
         self.assertIn("load_lookup_cache", lookup)
         self.assertIn("force_refresh=force_refresh", source)
         self.assertIn("form.set_margin_end(18)", source)
-        self.assertIn('subtitle="Kolekcja RPG, sesje i gry planszowe"', (self.root / "sesyjka" / "app.py").read_text(encoding="utf-8"))
+        self.assertIn('label="Kolekcja RPG, sesje i gry planszowe"', (self.root / "sesyjka" / "app.py").read_text(encoding="utf-8"))
         self.assertIn("XDG_CACHE_HOME", (self.root / "sesyjka" / "config.py").read_text(encoding="utf-8"))
 
+
+    def test_cloud_sync_is_integrated_without_changing_user_database_list(self) -> None:
+        app = (self.root / "sesyjka" / "app.py").read_text(encoding="utf-8")
+        cloud = (self.root / "sesyjka" / "cloud.py").read_text(encoding="utf-8")
+        config = (self.root / "sesyjka" / "config.py").read_text(encoding="utf-8")
+        schema = (self.root / "supabase" / "schema.sql").read_text(encoding="utf-8")
+        self.assertIn("CloudService(databases)", app)
+        self.assertIn('label="Sesyjka Cloud"', app)
+        self.assertIn("trigger_cloud_sync", app)
+        self.assertIn("show_cloud_conflicts", app)
+        self.assertIn('databases.own_root / "sync.db"', cloud)
+        self.assertIn("SupabaseHttpClient", cloud)
+        self.assertIn("sync_conflicts", cloud)
+        self.assertIn('DB_FILES = (*CORE_DB_FILES, "planszowe.db")', config)
+        self.assertNotIn('"sync.db"', config.split("DB_FILES", 1)[1].split("def data_dir", 1)[0])
+        self.assertIn("enable row level security", schema.lower())
+        self.assertIn("auth.uid()", schema)
+        self.assertIn("to authenticated", schema)
+
+    def test_main_title_is_larger_and_cloud_status_is_visible(self) -> None:
+        app = (self.root / "sesyjka" / "app.py").read_text(encoding="utf-8")
+        self.assertIn(".app-main-title", app)
+        self.assertIn("font-size: 22px", app)
+        self.assertIn('self.cloud_status_label = Gtk.Label(label="Cloud: wyłączona")', app)
 
 
 if __name__ == "__main__":
