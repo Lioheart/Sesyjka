@@ -25,6 +25,7 @@ class DatabaseManager:
         "gracze.db": "gracze",
         "wydawcy.db": "wydawcy",
         "planszowe.db": "planszowe",
+        "zasoby.db": "zasoby",
     }
     SCHEMA_REQUIREMENTS: dict[str, dict[str, set[str]]] = {
         "wydawcy.db": {
@@ -106,6 +107,22 @@ class DatabaseManager:
                 "notatki",
             },
         },
+        "zasoby.db": {
+            "zasoby": {
+                "id", "pozycja_rpg_id", "typ", "nazwa", "dostawca",
+                "format", "sha256", "nazwa_pliku", "external_id",
+                "product_url", "rozmiar", "isbn", "wydawca",
+                "data_zakupu", "utworzono", "zmodyfikowano",
+            },
+            "lokalizacje": {
+                "id", "zasob_id", "typ", "magazyn_uuid",
+                "sciezka_wzgledna", "url", "provider_ref",
+                "preferowana", "ostatnio_dostepny",
+            },
+            "magazyny": {
+                "id", "uuid", "nazwa", "typ", "sciezka_bazowa", "aktywny",
+            },
+        },
     }
 
     def __init__(self, root: Path | None = None) -> None:
@@ -174,6 +191,7 @@ class DatabaseManager:
         self._init_systems()
         self._init_sessions()
         self._init_board_games()
+        self._init_digital_resources()
 
     def _backup_before_schema_update(self) -> Path | None:
         existing = [self._own_root / name for name in DB_FILES if (self._own_root / name).is_file()]
@@ -466,6 +484,107 @@ class DatabaseManager:
                         (publisher_id, int(row["id"])),
                     )
 
+
+    def _init_digital_resources(self) -> None:
+        with self.connect("zasoby.db", write=True) as connection:
+            connection.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS zasoby (
+                    id INTEGER PRIMARY KEY,
+                    pozycja_rpg_id INTEGER,
+                    typ TEXT NOT NULL DEFAULT 'PDF',
+                    nazwa TEXT NOT NULL,
+                    dostawca TEXT,
+                    format TEXT,
+                    sha256 TEXT,
+                    nazwa_pliku TEXT,
+                    external_id TEXT,
+                    product_url TEXT,
+                    rozmiar INTEGER,
+                    isbn TEXT,
+                    wydawca TEXT,
+                    data_zakupu TEXT,
+                    utworzono TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    zmodyfikowano TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_zasoby_external_id
+                ON zasoby(external_id) WHERE external_id IS NOT NULL;
+
+                CREATE INDEX IF NOT EXISTS idx_zasoby_pozycja_rpg
+                ON zasoby(pozycja_rpg_id);
+
+                CREATE TABLE IF NOT EXISTS lokalizacje (
+                    id INTEGER PRIMARY KEY,
+                    zasob_id INTEGER NOT NULL,
+                    typ TEXT NOT NULL,
+                    magazyn_uuid TEXT,
+                    sciezka_wzgledna TEXT,
+                    url TEXT,
+                    provider_ref TEXT,
+                    preferowana INTEGER NOT NULL DEFAULT 0,
+                    ostatnio_dostepny INTEGER NOT NULL DEFAULT 0,
+                    FOREIGN KEY (zasob_id) REFERENCES zasoby(id) ON DELETE CASCADE
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_lokalizacje_zasob
+                ON lokalizacje(zasob_id);
+
+                CREATE TABLE IF NOT EXISTS magazyny (
+                    id INTEGER PRIMARY KEY,
+                    uuid TEXT NOT NULL UNIQUE,
+                    nazwa TEXT NOT NULL,
+                    typ TEXT NOT NULL DEFAULT 'Lokalny',
+                    sciezka_bazowa TEXT NOT NULL,
+                    aktywny INTEGER NOT NULL DEFAULT 1
+                );
+                """
+            )
+            self._ensure_columns(
+                connection,
+                "zasoby",
+                {
+                    "pozycja_rpg_id": "INTEGER",
+                    "typ": "TEXT NOT NULL DEFAULT 'PDF'",
+                    "nazwa": "TEXT",
+                    "dostawca": "TEXT",
+                    "format": "TEXT",
+                    "sha256": "TEXT",
+                    "nazwa_pliku": "TEXT",
+                    "external_id": "TEXT",
+                    "product_url": "TEXT",
+                    "rozmiar": "INTEGER",
+                    "isbn": "TEXT",
+                    "wydawca": "TEXT",
+                    "data_zakupu": "TEXT",
+                    "utworzono": "TEXT",
+                    "zmodyfikowano": "TEXT",
+                },
+            )
+            self._ensure_columns(
+                connection,
+                "lokalizacje",
+                {
+                    "magazyn_uuid": "TEXT",
+                    "sciezka_wzgledna": "TEXT",
+                    "url": "TEXT",
+                    "provider_ref": "TEXT",
+                    "preferowana": "INTEGER NOT NULL DEFAULT 0",
+                    "ostatnio_dostepny": "INTEGER NOT NULL DEFAULT 0",
+                },
+            )
+            self._ensure_columns(
+                connection,
+                "magazyny",
+                {
+                    "uuid": "TEXT",
+                    "nazwa": "TEXT",
+                    "typ": "TEXT NOT NULL DEFAULT 'Lokalny'",
+                    "sciezka_bazowa": "TEXT",
+                    "aktywny": "INTEGER NOT NULL DEFAULT 1",
+                },
+            )
+
     def has_active_database(self, filename: str) -> bool:
         if filename not in DB_FILES:
             return False
@@ -516,6 +635,7 @@ class DatabaseManager:
             "gracze.db": "Gracze",
             "wydawcy.db": "Wydawcy",
             "planszowe.db": "Gry planszowe",
+            "zasoby.db": "Zasoby cyfrowe",
         }
         for filename in DB_FILES:
             source = self.path(filename, own=True)

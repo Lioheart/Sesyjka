@@ -8,7 +8,7 @@ from typing import Any
 
 APP_DIR_NAME = "sesyjka"
 CORE_DB_FILES = ("systemy_rpg.db", "sesje_rpg.db", "gracze.db", "wydawcy.db")
-DB_FILES = (*CORE_DB_FILES, "planszowe.db")
+DB_FILES = (*CORE_DB_FILES, "planszowe.db", "zasoby.db")
 
 DEFAULT_SUPABASE_URL = "https://rjevhlnscdodgoaztxao.supabase.co"
 DEFAULT_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_AfaZRdfEWMi9QSMOjXgoRA_6zA6W7Yn"

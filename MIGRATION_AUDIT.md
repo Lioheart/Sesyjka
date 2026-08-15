@@ -44,9 +44,9 @@ Agregacja odbywa się w `Repository.statistics()`, poza widgetami. Widok renderu
 
 ## Sesyjka Cloud
 
-Wersja 0.9.3 dodaje niezależną warstwę synchronizacji. `sync.db` nie należy do `DB_FILES` i nie jest częścią importu ani eksportu baz domenowych. Zawiera identyfikator urządzenia, hasze ostatnio zsynchronizowanych rekordów i nierozwiązane konflikty.
+Wersja 0.9.6 zachowuje niezależną warstwę synchronizacji. `sync.db` nie należy do `DB_FILES` i nie jest częścią importu ani eksportu baz domenowych. Zawiera identyfikator urządzenia, hasze ostatnio zsynchronizowanych rekordów i nierozwiązane konflikty.
 
-Klient Supabase korzysta z Auth oraz Data REST API przez standardową bibliotekę `urllib`, więc pakiety systemowe nie zyskują dodatkowej zależności Python. Lokalny CRUD nie zależy od sieci. Synchronizacja skanuje aktualne rekordy pięciu baz, porównuje stabilny JSON i hasze SHA-256 oraz wysyła zmiany lub pobiera wersje chmurowe. Jeżeli obie strony zmieniły rekord od ostatniej udanej synchronizacji, automatyczne nadpisanie jest zatrzymywane.
+Klient Supabase korzysta z Auth oraz Data REST API przez standardową bibliotekę `urllib`, więc pakiety systemowe nie zyskują dodatkowej zależności Python. Lokalny CRUD nie zależy od sieci. Synchronizacja skanuje rekordy baz domenowych, w tym zasoby cyfrowe, porównuje stabilny JSON i hasze SHA-256 oraz wysyła zmiany lub pobiera wersje chmurowe. Jeżeli obie strony zmieniły rekord od ostatniej udanej synchronizacji, automatyczne nadpisanie jest zatrzymywane.
 
 Schemat backendu znajduje się w `supabase/schema.sql`. Tabela chmurowa ma włączone Row Level Security i polityki ograniczone do `auth.uid()` roli `authenticated`. Aplikacja przyjmuje wyłącznie klucz publishable/anon.
 
@@ -69,3 +69,8 @@ Wersja wynikowa buduje pakiety DEB, RPM i instalator ogólny przez GitHub Action
 7. Testy `sync.db`, uploadu, pobierania, tombstone i konfliktów Sesyjka Cloud.
 8. Kontrola składni skryptów Bash.
 9. Skan kodu pod kątem Tkintera, CustomTkintera i tksheet.
+
+
+### Zasoby cyfrowe
+
+`zasoby.db` jest osobnym rozszerzeniem portu GTK4. Nie wymaga ALTER TABLE w czterech bazach projektu źródłowego. `magazyny` są lokalne dla urządzenia, a `zasoby` i `lokalizacje` mogą być synchronizowane przez Cloud.

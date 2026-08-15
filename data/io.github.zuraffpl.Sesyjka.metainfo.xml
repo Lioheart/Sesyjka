@@ -13,11 +13,11 @@
   <description>
     <p>Organize tabletop role-playing game systems, books, supplements, sessions, players, publishers, board games and card games in one native GTK application.</p>
     <p>Browse hierarchical collections with sorting and per-column filters, record session participants and notes, and inspect quantity charts that update after data changes.</p>
-    <p>The four SQLite databases used by the original Sesyjka project remain compatible. Board and card games are stored in a separate fifth database. Optional Sesyjka Cloud synchronization uses Supabase Auth and a separate sync.db without changing those schemas. Backups, ZIP and folder transfer, Excel export, calendar export and a read-only guest mode are included.</p>
+    <p>The four SQLite databases used by the original Sesyjka project remain compatible. Board and card games and digital resources are stored in separate extension databases. Optional Sesyjka Cloud synchronization uses Supabase Auth and a separate sync.db without changing those schemas. Backups, ZIP and folder transfer, Excel export, calendar export and a read-only guest mode are included.</p>
     <p>The current user interface is available in Polish.</p>
     <p xml:lang="pl">Porządkuj systemy gier fabularnych, podręczniki, suplementy, sesje, graczy, wydawców oraz gry planszowe i karciane w jednej natywnej aplikacji GTK.</p>
     <p xml:lang="pl">Przeglądaj hierarchiczną kolekcję z sortowaniem i filtrami kolumnowymi, zapisuj uczestników i notatki sesji oraz analizuj automatycznie aktualizowane wykresy ilości.</p>
-    <p xml:lang="pl">Cztery bazy SQLite projektu źródłowego pozostają zgodne. Gry planszowe i karciane są przechowywane w osobnej piątej bazie. Opcjonalna Sesyjka Cloud używa Supabase Auth i osobnej sync.db bez zmiany tych schematów. Program obsługuje kopie zapasowe, transfer ZIP i folderów, eksport Excel, eksport kalendarza oraz tryb gościa tylko do odczytu.</p>
+    <p xml:lang="pl">Cztery bazy SQLite projektu źródłowego pozostają zgodne. Gry planszowe, karciane i zasoby cyfrowe są przechowywane w osobnych bazach rozszerzeń. Opcjonalna Sesyjka Cloud używa Supabase Auth i osobnej sync.db bez zmiany tych schematów. Program obsługuje kopie zapasowe, transfer ZIP i folderów, eksport Excel, eksport kalendarza oraz tryb gościa tylko do odczytu.</p>
   </description>
   <launchable type="desktop-id">io.github.zuraffpl.Sesyjka.desktop</launchable>
   <provides>
@@ -38,47 +38,59 @@
   <url type="vcs-browser">https://github.com/Lioheart/Sesyjka</url>
   <screenshots>
     <screenshot type="default" xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.9.3/screenshots/image.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.9.6/screenshots/image.png</image>
       <caption>Przeglądaj systemy RPG i hierarchiczną kolekcję podręczników</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.9.3/screenshots/image2.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.9.6/screenshots/image2.png</image>
       <caption>Edytuj lub usuwaj rekordy z menu kontekstowego</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.9.3/screenshots/image4.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.9.6/screenshots/image4.png</image>
       <caption>Dodawaj systemy gry i przypisuj wydawców</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.9.3/screenshots/image5.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.9.6/screenshots/image5.png</image>
       <caption>Twórz wydawcę bez zamykania aktualnego formularza</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.9.3/screenshots/image6.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.9.6/screenshots/image6.png</image>
       <caption>Zapisuj sesje z systemami, graczami, kampaniami i notatkami</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.9.3/screenshots/image7.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.9.6/screenshots/image7.png</image>
       <caption>Zarządzaj katalogiem graczy i tagami grup</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.9.3/screenshots/image8.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.9.6/screenshots/image8.png</image>
       <caption>Zarządzaj danymi wydawców i ich stronami internetowymi</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.9.3/screenshots/image9.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.9.6/screenshots/image9.png</image>
       <caption>Analizuj statystyki kolekcji i sesji w jasnym motywie</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.9.3/screenshots/image10.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.9.6/screenshots/image10.png</image>
       <caption>Korzystaj z pełnego interfejsu w ciemnym motywie Adwaita</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.9.3/screenshots/image11.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.9.6/screenshots/image11.png</image>
       <caption>Eksportuj i importuj bazy oraz przeglądaj je w trybie gościa</caption>
     </screenshot>
   </screenshots>
   <releases>
+    <release version="0.9.6" date="2026-08-15">
+      <description>
+        <p>Fixed DriveThruRPG synchronization transport by decoding compressed API responses, using Bearer JWT authentication, and aligning order_products parsing with the paginated JSON:API response.</p>
+        <p xml:lang="pl">Naprawiono transport synchronizacji DriveThruRPG: obsługę skompresowanych odpowiedzi API, autoryzację JWT Bearer oraz parser paginowanej odpowiedzi JSON:API order_products.</p>
+      </description>
+    </release>
+    <release version="0.9.4" date="2026-08-15">
+      <description>
+        <p>Added a separate digital-resource library for PDFs, VTT content and web providers, logical local/NAS/USB storage roots, SHA-256 PDF scanning, multiple locations per resource and experimental DriveThruRPG library metadata synchronization.</p>
+        <p xml:lang="pl">Dodano osobną bibliotekę zasobów cyfrowych dla PDF, VTT i dostawców WWW, logiczne magazyny lokalne/NAS/USB, skanowanie PDF z SHA-256, wiele lokalizacji jednego zasobu oraz eksperymentalną synchronizację metadanych biblioteki DriveThruRPG.</p>
+      </description>
+    </release>
     <release version="0.9.3" date="2026-08-15">
       <description>
         <p>Fixed Fedora RPM release packaging so the Supabase setup files are included in the source tree used by rpmbuild checks. Generic and RPM source staging now share one implementation.</p>

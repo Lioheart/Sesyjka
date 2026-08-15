@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 import re
 from pathlib import Path
+import uuid
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -490,6 +491,18 @@ class Repository:
         return record_id
 
     def delete_system(self, record_id: int) -> None:
+        if self.db.has_active_database("zasoby.db"):
+            linked_resources = int(
+                self.db.table_rows(
+                    "zasoby.db",
+                    "SELECT COUNT(*) AS count FROM zasoby WHERE pozycja_rpg_id=?",
+                    (record_id,),
+                )[0]["count"]
+            )
+            if linked_resources:
+                raise ValueError(
+                    "Nie można usunąć pozycji RPG, dopóki ma przypisane zasoby cyfrowe."
+                )
         child_count = int(
             self.db.table_rows(
                 "systemy_rpg.db",
@@ -892,12 +905,461 @@ class Repository:
                 )
         return destination
 
+    @staticmethod
+    def _format_file_size(size: Any) -> str:
+        try:
+            value = int(size or 0)
+        except (TypeError, ValueError):
+            value = 0
+        if value <= 0:
+            return ""
+        units = ("B", "KB", "MB", "GB", "TB")
+        amount = float(value)
+        index = 0
+        while amount >= 1024 and index < len(units) - 1:
+            amount /= 1024
+            index += 1
+        return f"{amount:.1f} {units[index]}" if index else f"{value} B"
+
+    def storage_roots(self) -> list[dict[str, Any]]:
+        if not self.db.has_active_database("zasoby.db"):
+            return []
+        rows = self.db.table_rows(
+            "zasoby.db",
+            """
+            SELECT id, uuid, nazwa, typ, sciezka_bazowa, aktywny
+            FROM magazyny
+            ORDER BY nazwa COLLATE NOCASE
+            """,
+        )
+        result = []
+        for row in rows:
+            item = dict(row)
+            base = Path(str(item.get("sciezka_bazowa") or "")).expanduser()
+            item["dostepny"] = bool(base.is_dir())
+            result.append(item)
+        return result
+
+    def unmapped_storage_roots(self) -> list[dict[str, Any]]:
+        if not self.db.has_active_database("zasoby.db"):
+            return []
+        mapped = {str(item["uuid"]) for item in self.storage_roots()}
+        rows = self.db.table_rows(
+            "zasoby.db",
+            """
+            SELECT magazyn_uuid, COUNT(*) AS count
+            FROM lokalizacje
+            WHERE TRIM(COALESCE(magazyn_uuid, '')) <> ''
+            GROUP BY magazyn_uuid
+            ORDER BY count DESC, magazyn_uuid
+            """,
+        )
+        return [
+            {"uuid": str(row["magazyn_uuid"]), "count": int(row["count"])}
+            for row in rows
+            if str(row["magazyn_uuid"]) not in mapped
+        ]
+
+    def save_storage_root(self, values: dict[str, Any], record_id: int | None = None) -> int:
+        name = str(values.get("nazwa") or "").strip()
+        storage_type = str(values.get("typ") or "Lokalny").strip() or "Lokalny"
+        base_path = str(values.get("sciezka_bazowa") or "").strip()
+        if not name:
+            raise ValueError("Nazwa magazynu jest wymagana.")
+        if not base_path:
+            raise ValueError("Wybierz katalog magazynu.")
+        path = Path(base_path).expanduser()
+        if not path.is_dir():
+            raise ValueError("Wybrany katalog magazynu nie istnieje.")
+        normalized = str(path.resolve())
+        with self.db.connect("zasoby.db", write=True) as connection:
+            if record_id is None:
+                record_id = self.db.next_id("zasoby.db", "magazyny")
+                storage_uuid = str(values.get("uuid") or uuid.uuid4())
+                connection.execute(
+                    """
+                    INSERT INTO magazyny (id, uuid, nazwa, typ, sciezka_bazowa, aktywny)
+                    VALUES (?, ?, ?, ?, ?, 1)
+                    """,
+                    (record_id, storage_uuid, name, storage_type, normalized),
+                )
+            else:
+                connection.execute(
+                    """
+                    UPDATE magazyny
+                    SET nazwa=?, typ=?, sciezka_bazowa=?, aktywny=?
+                    WHERE id=?
+                    """,
+                    (name, storage_type, normalized, int(bool(values.get("aktywny", True))), record_id),
+                )
+        return int(record_id)
+
+    def delete_storage_root(self, record_id: int) -> None:
+        rows = self.db.table_rows(
+            "zasoby.db", "SELECT uuid FROM magazyny WHERE id=?", (record_id,)
+        )
+        if not rows:
+            return
+        storage_uuid = str(rows[0]["uuid"] or "")
+        linked = int(
+            self.db.table_rows(
+                "zasoby.db",
+                "SELECT COUNT(*) AS count FROM lokalizacje WHERE magazyn_uuid=?",
+                (storage_uuid,),
+            )[0]["count"]
+        )
+        if linked:
+            raise ValueError("Nie można usunąć magazynu używanego przez zapisane lokalizacje.")
+        with self.db.connect("zasoby.db", write=True) as connection:
+            connection.execute("DELETE FROM magazyny WHERE id=?", (record_id,))
+
+    def resource_locations(self, resource_id: int) -> list[dict[str, Any]]:
+        if not self.db.has_active_database("zasoby.db"):
+            return []
+        storages = {str(item["uuid"]): item for item in self.storage_roots()}
+        rows = self.db.table_rows(
+            "zasoby.db",
+            """
+            SELECT id, zasob_id, typ, magazyn_uuid, sciezka_wzgledna, url,
+                   provider_ref, preferowana, ostatnio_dostepny
+            FROM lokalizacje WHERE zasob_id=?
+            ORDER BY preferowana DESC, id
+            """,
+            (resource_id,),
+        )
+        result: list[dict[str, Any]] = []
+        for row in rows:
+            item = dict(row)
+            storage = storages.get(str(item.get("magazyn_uuid") or ""))
+            item["magazyn_nazwa"] = storage.get("nazwa", "") if storage else ""
+            item["sciezka_pelna"] = ""
+            available = False
+            if storage and item.get("sciezka_wzgledna"):
+                full_path = Path(str(storage.get("sciezka_bazowa") or "")) / str(item["sciezka_wzgledna"])
+                item["sciezka_pelna"] = str(full_path)
+                available = full_path.is_file()
+            elif item.get("url"):
+                available = True
+            item["dostepny"] = available
+            result.append(item)
+        return result
+
+    def _resource_summary(self, resource_id: int) -> tuple[str, str, int]:
+        locations = self.resource_locations(resource_id)
+        if not locations:
+            return "Brak", "", 0
+        local = [item for item in locations if item.get("sciezka_wzgledna")]
+        online = [item for item in locations if item.get("url")]
+        available_local = [item for item in local if item.get("dostepny")]
+        if available_local:
+            status = "Dostępny lokalnie"
+        elif online:
+            status = "Online"
+        elif local:
+            status = "Magazyn niedostępny"
+        else:
+            status = "Brak"
+        labels: list[str] = []
+        for item in locations[:3]:
+            if item.get("magazyn_nazwa"):
+                labels.append(str(item["magazyn_nazwa"]))
+            elif item.get("typ"):
+                labels.append(str(item["typ"]))
+        summary = ", ".join(dict.fromkeys(labels))
+        return status, summary, len(locations)
+
+    def digital_resources(self) -> list[dict[str, Any]]:
+        if not self.db.has_active_database("zasoby.db"):
+            return []
+        positions = {int(item["id"]): item for item in self.systems()}
+        rows = self.db.table_rows(
+            "zasoby.db",
+            """
+            SELECT id, pozycja_rpg_id, typ, nazwa, dostawca, format, sha256,
+                   nazwa_pliku, external_id, product_url, rozmiar, isbn,
+                   wydawca, data_zakupu, utworzono, zmodyfikowano
+            FROM zasoby
+            ORDER BY nazwa COLLATE NOCASE, id
+            """,
+        )
+        result: list[dict[str, Any]] = []
+        for row in rows:
+            item = dict(row)
+            position = positions.get(int(item["pozycja_rpg_id"])) if item.get("pozycja_rpg_id") else None
+            item["pozycja_nazwa"] = position.get("nazwa", "") if position else ""
+            item["system_nazwa"] = position.get("system_gry_nazwa", "") if position else ""
+            status, location_summary, location_count = self._resource_summary(int(item["id"]))
+            item["dostepnosc"] = status
+            item["lokalizacje"] = location_summary
+            item["liczba_lokalizacji"] = location_count
+            item["rozmiar_tekst"] = self._format_file_size(item.get("rozmiar"))
+            result.append(item)
+        return result
+
+    def save_digital_resource(self, values: dict[str, Any], record_id: int | None = None) -> int:
+        name = str(values.get("nazwa") or "").strip()
+        if not name:
+            raise ValueError("Nazwa zasobu jest wymagana.")
+        resource_type = str(values.get("typ") or "PDF").strip() or "PDF"
+        position_id = values.get("pozycja_rpg_id")
+        if position_id not in (None, ""):
+            valid_ids = {int(item["id"]) for item in self.systems() if str(item.get("typ") or "").casefold() != "grupa"}
+            position_id = int(position_id)
+            if position_id not in valid_ids:
+                raise ValueError("Wybrana pozycja RPG nie istnieje.")
+        else:
+            position_id = None
+        fields = (
+            "pozycja_rpg_id", "typ", "nazwa", "dostawca", "format", "sha256",
+            "nazwa_pliku", "external_id", "product_url", "rozmiar", "isbn",
+            "wydawca", "data_zakupu",
+        )
+        normalized = dict(values)
+        normalized.update({"pozycja_rpg_id": position_id, "typ": resource_type, "nazwa": name})
+        payload = [_clean(normalized.get(field)) for field in fields]
+        with self.db.connect("zasoby.db", write=True) as connection:
+            if record_id is None:
+                record_id = self.db.next_id("zasoby.db", "zasoby")
+                connection.execute(
+                    f"INSERT INTO zasoby (id, {', '.join(fields)}) VALUES (?, {', '.join('?' for _ in fields)})",
+                    (record_id, *payload),
+                )
+            else:
+                assignments = ", ".join(f"{field}=?" for field in fields)
+                connection.execute(
+                    f"UPDATE zasoby SET {assignments}, zmodyfikowano=CURRENT_TIMESTAMP WHERE id=?",
+                    (*payload, record_id),
+                )
+        return int(record_id)
+
+    def delete_digital_resource(self, record_id: int) -> None:
+        with self.db.connect("zasoby.db", write=True) as connection:
+            connection.execute("DELETE FROM zasoby WHERE id=?", (record_id,))
+
+    def save_resource_location(self, resource_id: int, values: dict[str, Any], record_id: int | None = None) -> int:
+        resource_exists = bool(
+            self.db.table_rows("zasoby.db", "SELECT 1 FROM zasoby WHERE id=?", (resource_id,))
+        )
+        if not resource_exists:
+            raise ValueError("Zasób cyfrowy nie istnieje.")
+        storage_uuid = str(values.get("magazyn_uuid") or "").strip() or None
+        relative_path = str(values.get("sciezka_wzgledna") or "").strip() or None
+        url = str(values.get("url") or "").strip() or None
+        location_type = str(values.get("typ") or ("Plik" if relative_path else "WWW")).strip()
+        if relative_path and not storage_uuid:
+            raise ValueError("Lokalny plik musi należeć do magazynu.")
+        if storage_uuid:
+            valid = {str(item["uuid"]) for item in self.storage_roots()}
+            if storage_uuid not in valid:
+                raise ValueError("Wybrany magazyn nie istnieje na tym urządzeniu.")
+        if not relative_path and not url:
+            raise ValueError("Podaj plik albo adres URL.")
+        with self.db.connect("zasoby.db", write=True) as connection:
+            if values.get("preferowana"):
+                connection.execute("UPDATE lokalizacje SET preferowana=0 WHERE zasob_id=?", (resource_id,))
+            payload = (
+                resource_id, location_type, storage_uuid, relative_path, url,
+                _clean(values.get("provider_ref")), int(bool(values.get("preferowana"))),
+                int(bool(values.get("ostatnio_dostepny"))),
+            )
+            if record_id is None:
+                record_id = self.db.next_id("zasoby.db", "lokalizacje")
+                connection.execute(
+                    """
+                    INSERT INTO lokalizacje
+                    (id, zasob_id, typ, magazyn_uuid, sciezka_wzgledna, url,
+                     provider_ref, preferowana, ostatnio_dostepny)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (record_id, *payload),
+                )
+            else:
+                connection.execute(
+                    """
+                    UPDATE lokalizacje SET typ=?, magazyn_uuid=?, sciezka_wzgledna=?,
+                    url=?, provider_ref=?, preferowana=?, ostatnio_dostepny=?
+                    WHERE id=? AND zasob_id=?
+                    """,
+                    (*payload[1:], record_id, resource_id),
+                )
+        return int(record_id)
+
+    def delete_resource_location(self, record_id: int) -> None:
+        with self.db.connect("zasoby.db", write=True) as connection:
+            connection.execute("DELETE FROM lokalizacje WHERE id=?", (record_id,))
+
+    def best_resource_target(self, resource_id: int) -> dict[str, Any] | None:
+        locations = self.resource_locations(resource_id)
+        preferred = sorted(locations, key=lambda item: (not bool(item.get("preferowana")), int(item.get("id") or 0)))
+        for item in preferred:
+            if item.get("sciezka_pelna") and item.get("dostepny"):
+                return {"kind": "file", "value": item["sciezka_pelna"], "location": item}
+        for item in preferred:
+            if item.get("url"):
+                return {"kind": "url", "value": item["url"], "location": item}
+        rows = self.db.table_rows(
+            "zasoby.db", "SELECT product_url FROM zasoby WHERE id=?", (resource_id,)
+        )
+        if rows and rows[0]["product_url"]:
+            return {"kind": "url", "value": str(rows[0]["product_url"]), "location": None}
+        return None
+
+    def import_scanned_pdfs(self, storage_id: int, scan_results: list[Any]) -> dict[str, int]:
+        storages = {int(item["id"]): item for item in self.storage_roots()}
+        storage = storages.get(int(storage_id))
+        if not storage:
+            raise ValueError("Wybrany magazyn nie istnieje.")
+        storage_uuid = str(storage["uuid"])
+        created = linked = existing = 0
+        with self.db.connect("zasoby.db", write=True) as connection:
+            for scanned in scan_results:
+                duplicate = connection.execute(
+                    "SELECT id, pozycja_rpg_id FROM zasoby WHERE sha256=? AND sha256<>'' LIMIT 1",
+                    (str(scanned.sha256),),
+                ).fetchone()
+                if duplicate:
+                    resource_id = int(duplicate["id"])
+                    existing += 1
+                    if duplicate["pozycja_rpg_id"] is None and scanned.suggested_rpg_id is not None:
+                        connection.execute(
+                            "UPDATE zasoby SET pozycja_rpg_id=?, zmodyfikowano=CURRENT_TIMESTAMP WHERE id=?",
+                            (int(scanned.suggested_rpg_id), resource_id),
+                        )
+                        linked += 1
+                else:
+                    resource_id = int(connection.execute("SELECT COALESCE(MAX(id),0)+1 FROM zasoby").fetchone()[0])
+                    connection.execute(
+                        """
+                        INSERT INTO zasoby
+                        (id, pozycja_rpg_id, typ, nazwa, dostawca, format, sha256,
+                         nazwa_pliku, rozmiar)
+                        VALUES (?, ?, 'PDF', ?, 'Plik lokalny', 'PDF', ?, ?, ?)
+                        """,
+                        (
+                            resource_id,
+                            scanned.suggested_rpg_id,
+                            Path(scanned.filename).stem,
+                            scanned.sha256,
+                            scanned.filename,
+                            int(scanned.size),
+                        ),
+                    )
+                    created += 1
+                    if scanned.suggested_rpg_id is not None:
+                        linked += 1
+                exists_location = connection.execute(
+                    """
+                    SELECT 1 FROM lokalizacje
+                    WHERE zasob_id=? AND magazyn_uuid=? AND sciezka_wzgledna=?
+                    """,
+                    (resource_id, storage_uuid, scanned.relative_path),
+                ).fetchone()
+                if not exists_location:
+                    location_id = int(connection.execute("SELECT COALESCE(MAX(id),0)+1 FROM lokalizacje").fetchone()[0])
+                    connection.execute(
+                        """
+                        INSERT INTO lokalizacje
+                        (id, zasob_id, typ, magazyn_uuid, sciezka_wzgledna,
+                         preferowana, ostatnio_dostepny)
+                        VALUES (?, ?, 'Plik', ?, ?, 0, 1)
+                        """,
+                        (location_id, resource_id, storage_uuid, scanned.relative_path),
+                    )
+        return {"created": created, "linked": linked, "existing": existing, "found": len(scan_results)}
+
+    def import_drivethru_library(self, items: list[Any]) -> dict[str, int]:
+        systems = self.systems()
+        by_isbn = {
+            re.sub(r"[^0-9Xx]", "", str(item.get("isbn") or "")).upper(): int(item["id"])
+            for item in systems
+            if item.get("isbn") and str(item.get("typ") or "").casefold() != "grupa"
+        }
+        from .digital_resources import match_rpg_item
+
+        created = updated = linked = 0
+        with self.db.connect("zasoby.db", write=True) as connection:
+            for entry in items:
+                isbn = re.sub(r"[^0-9Xx]", "", str(entry.isbn or "")).upper()
+                position_id = by_isbn.get(isbn) if isbn else None
+                if position_id is None:
+                    position_id, _confidence = match_rpg_item(entry.title or entry.filename, systems)
+                existing = connection.execute(
+                    "SELECT id, pozycja_rpg_id FROM zasoby WHERE external_id=?",
+                    (entry.external_id,),
+                ).fetchone()
+                values = (
+                    position_id,
+                    entry.resource_type,
+                    entry.title or entry.filename,
+                    "DriveThruRPG",
+                    entry.format_name,
+                    entry.sha256 or None,
+                    entry.filename or None,
+                    entry.product_url,
+                    entry.size,
+                    entry.isbn or None,
+                    entry.publisher or None,
+                    entry.date_purchased or None,
+                )
+                if existing:
+                    resource_id = int(existing["id"])
+                    if existing["pozycja_rpg_id"] is not None and position_id is None:
+                        position_id = int(existing["pozycja_rpg_id"])
+                        values = (position_id, *values[1:])
+                    connection.execute(
+                        """
+                        UPDATE zasoby SET pozycja_rpg_id=?, typ=?, nazwa=?, dostawca=?,
+                        format=?, sha256=?, nazwa_pliku=?, product_url=?, rozmiar=?,
+                        isbn=?, wydawca=?, data_zakupu=?, zmodyfikowano=CURRENT_TIMESTAMP
+                        WHERE id=?
+                        """,
+                        (*values, resource_id),
+                    )
+                    updated += 1
+                else:
+                    resource_id = int(connection.execute("SELECT COALESCE(MAX(id),0)+1 FROM zasoby").fetchone()[0])
+                    connection.execute(
+                        """
+                        INSERT INTO zasoby
+                        (id, pozycja_rpg_id, typ, nazwa, dostawca, format, sha256,
+                         nazwa_pliku, external_id, product_url, rozmiar, isbn,
+                         wydawca, data_zakupu)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (resource_id, *values[:7], entry.external_id, *values[7:]),
+                    )
+                    created += 1
+                if position_id is not None:
+                    linked += 1
+                provider_ref = f"{entry.order_product_id}:{entry.file_index if entry.file_index is not None else 'product'}"
+                location = connection.execute(
+                    "SELECT id FROM lokalizacje WHERE zasob_id=? AND typ='DriveThruRPG'",
+                    (resource_id,),
+                ).fetchone()
+                if location:
+                    connection.execute(
+                        "UPDATE lokalizacje SET url=?, provider_ref=? WHERE id=?",
+                        (entry.product_url, provider_ref, int(location["id"])),
+                    )
+                else:
+                    location_id = int(connection.execute("SELECT COALESCE(MAX(id),0)+1 FROM lokalizacje").fetchone()[0])
+                    connection.execute(
+                        """
+                        INSERT INTO lokalizacje
+                        (id, zasob_id, typ, url, provider_ref, preferowana, ostatnio_dostepny)
+                        VALUES (?, ?, 'DriveThruRPG', ?, ?, 0, 1)
+                        """,
+                        (location_id, resource_id, entry.product_url, provider_ref),
+                    )
+        return {"created": created, "updated": updated, "linked": linked, "found": len(items)}
+
     def statistics(self) -> dict[str, Any]:
         systems = self.systems()
         sessions = self.sessions()
         players = self.players()
         publishers = self.publishers()
         board_games = self.board_games()
+        digital_resources = self.digital_resources()
 
         sessions_by_system = Counter(
             str(item.get("system_nazwa") or "Bez systemu") for item in sessions
@@ -1003,6 +1465,7 @@ class Repository:
             "Fizyczne": len(physical),
             "PDF": len(pdf),
             "Planszówki/Karcianki": len(board_games),
+            "Zasoby cyfrowe": len(digital_resources),
             "Wartość pozycji": collection_value,
         }
 
@@ -1038,6 +1501,10 @@ class Repository:
             "Planszówki/Karcianki": {
                 "title": "Gry planszowe i karciane",
                 "items": [("Planszówki", board_game_types.get("Planszówki", 0)), ("Karcianki", board_game_types.get("Karcianki", 0))],
+            },
+            "Zasoby cyfrowe": {
+                "title": "Zasoby cyfrowe według typu",
+                "items": sorted_counter(Counter(str(item.get("typ") or "Inne") for item in digital_resources)),
             },
         }
         return {

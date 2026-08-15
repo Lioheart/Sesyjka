@@ -97,8 +97,32 @@ class CloudSyncTests(unittest.TestCase):
             "gracze.db",
             "wydawcy.db",
             "planszowe.db",
+            "zasoby.db",
         }
         self.assertEqual({p.name for p in self.db.own_root.glob("*.db")} - {"sync.db"}, original)
+
+    def test_digital_resources_sync_but_device_storage_mappings_do_not(self) -> None:
+        game_system_id = self.repo.save_game_system({"nazwa": "System"})
+        position_id = self.repo.save_system(
+            {"nazwa": "Book", "typ": "Podręcznik Główny", "system_gry_id": game_system_id}
+        )
+        storage_root = self.root / "library"
+        storage_root.mkdir()
+        storage_id = self.repo.save_storage_root(
+            {"nazwa": "Laptop", "typ": "Lokalny", "sciezka_bazowa": str(storage_root)}
+        )
+        storage = next(item for item in self.repo.storage_roots() if item["id"] == storage_id)
+        resource_id = self.repo.save_digital_resource(
+            {"pozycja_rpg_id": position_id, "typ": "PDF", "nazwa": "Book PDF"}
+        )
+        self.repo.save_resource_location(
+            resource_id,
+            {"typ": "Plik", "magazyn_uuid": storage["uuid"], "sciezka_wzgledna": "Book.pdf"},
+        )
+        self.cloud.sync(self.url, self.key)
+        self.assertIn(("digital_resources", str(resource_id)), self.fake.records)
+        self.assertTrue(any(key[0] == "digital_locations" for key in self.fake.records))
+        self.assertFalse(any(key[0] == "digital_storages" for key in self.fake.records))
 
     def test_initial_local_records_are_uploaded(self) -> None:
         publisher_id = self.repo.save_publisher({"nazwa": "Test Publisher", "kraj": "PL", "strona": ""})

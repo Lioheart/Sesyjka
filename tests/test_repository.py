@@ -218,7 +218,7 @@ class RepositoryTests(unittest.TestCase):
         with zipfile.ZipFile(result) as archive:
             self.assertEqual(
                 set(archive.namelist()),
-                {"systemy_rpg.db", "sesje_rpg.db", "gracze.db", "wydawcy.db", "planszowe.db"},
+                {"systemy_rpg.db", "sesje_rpg.db", "gracze.db", "wydawcy.db", "planszowe.db", "zasoby.db"},
             )
 
     def test_guest_mode_blocks_writes(self) -> None:
@@ -294,7 +294,7 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(result, destination)
         self.assertEqual(
             {path.name for path in destination.iterdir()},
-            {"systemy_rpg.db", "sesje_rpg.db", "gracze.db", "wydawcy.db", "planszowe.db"},
+            {"systemy_rpg.db", "sesje_rpg.db", "gracze.db", "wydawcy.db", "planszowe.db", "zasoby.db"},
         )
 
     def test_import_validation_rejects_database_with_wrong_schema(self) -> None:

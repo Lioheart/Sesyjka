@@ -24,7 +24,7 @@ from .config import (
 )
 from .database_manager import DatabaseManager
 from .dialogs import ModalWindow, info
-from .pages import BoardGamesPage, PlayersPage, PublishersPage, SessionsPage, StatisticsPage, SystemsPage
+from .pages import BoardGamesPage, DigitalResourcesPage, PlayersPage, PublishersPage, SessionsPage, StatisticsPage, SystemsPage
 from .repository import Repository
 from .transfer import TransferWindow
 from .updater import (
@@ -206,7 +206,7 @@ class SesyjkaWindow(Adw.ApplicationWindow):
         title_box.set_halign(Gtk.Align.CENTER)
         title = Gtk.Label(label=APP_NAME)
         title.add_css_class("app-main-title")
-        subtitle = Gtk.Label(label="Kolekcja RPG, sesje i gry planszowe")
+        subtitle = Gtk.Label(label="Kolekcja RPG, sesje, gry planszowe i zasoby cyfrowe")
         subtitle.add_css_class("app-main-subtitle")
         title_box.append(title)
         title_box.append(subtitle)
@@ -326,6 +326,7 @@ class SesyjkaWindow(Adw.ApplicationWindow):
             "players": PlayersPage(self, self.repository),
             "publishers": PublishersPage(self, self.repository),
             "board_games": BoardGamesPage(self, self.repository),
+            "digital_resources": DigitalResourcesPage(self, self.repository),
             "statistics": StatisticsPage(self, self.repository),
         }
         self.stack.add_titled(self.pages["systems"], "systems", "Systemy RPG")
@@ -333,6 +334,7 @@ class SesyjkaWindow(Adw.ApplicationWindow):
         self.stack.add_titled(self.pages["players"], "players", "Gracze")
         self.stack.add_titled(self.pages["publishers"], "publishers", "Wydawcy")
         self.stack.add_titled(self.pages["board_games"], "board_games", "Gry planszowe")
+        self.stack.add_titled(self.pages["digital_resources"], "digital_resources", "Zasoby cyfrowe")
         self.stack.add_titled(self.pages["statistics"], "statistics", "Statystyki")
         self.stack.connect("notify::visible-child-name", lambda *_args: self.refresh_visible_page())
         for page in self.pages.values():
@@ -401,7 +403,7 @@ class SesyjkaWindow(Adw.ApplicationWindow):
     def refresh_dependent_pages(self) -> None:
         self.pages["statistics"].refresh()
         visible = self.stack.get_visible_child()
-        for key in ("systems", "sessions", "players", "publishers", "board_games"):
+        for key in ("systems", "sessions", "players", "publishers", "board_games", "digital_resources"):
             page = self.pages[key]
             if page is not visible:
                 page.refresh()
@@ -1108,6 +1110,10 @@ class SesyjkaWindow(Adw.ApplicationWindow):
     def show_history(self) -> None:
         dialog = ModalWindow(self, "Historia zmian", width=720, height=620)
         history_text = (
+            "0.9.6\n"
+            "Naprawiono synchronizację DriveThruRPG: odpowiedzi gzip/deflate są poprawnie rozpakowywane, token JWT jest wysyłany jako Bearer, a parser order_products obsługuje paginowany format JSON:API wraz z dołączonym wydawcą.\n\n"
+            "0.9.4\n"
+            "Dodano osobną bibliotekę zasobów cyfrowych w zasoby.db, logiczne magazyny lokalne/NAS/USB, skanowanie PDF z SHA-256, wiele lokalizacji jednego zasobu i eksperymentalny import biblioteki DriveThruRPG.\n\n"
             "0.9.3\n"
             "Backend Sesyjka Cloud jest skonfigurowany bezpośrednio w aplikacji, a GUI nie wymaga Project URL ani klucza Supabase. Dodano szybkie dodawanie zaznaczonej sesji do Google Calendar w przeglądarce oraz eksport pojedynczej sesji do ICS z otwarciem iCloud Calendar dla użytkowników Apple.\n\n"
             "0.9.1\n"
@@ -1174,8 +1180,8 @@ class SesyjkaWindow(Adw.ApplicationWindow):
         description = Gtk.Label(
             label=(
                 "Natywna aplikacja GTK4 i Libadwaita dla Linuksa do zarządzania kolekcją systemów RPG, "
-                "sesjami, graczami, wydawcami oraz grami planszowymi i karcianymi. "
-                "Cztery bazy projektu źródłowego pozostają zgodne, planszowe.db jest niezależnym rozszerzeniem, "
+                "sesjami, graczami, wydawcami, grami planszowymi oraz zasobami cyfrowymi PDF/VTT. "
+                "Cztery bazy projektu źródłowego pozostają zgodne, planszowe.db i zasoby.db są niezależnymi rozszerzeniami, "
                 "a sync.db przechowuje wyłącznie stan opcjonalnej synchronizacji Sesyjka Cloud."
             ),
             wrap=True,

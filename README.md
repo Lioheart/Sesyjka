@@ -1,4 +1,4 @@
-# Sesyjka GTK4 0.9.3
+# Sesyjka GTK4 0.9.6
 
 Natywna aplikacja dla Linuksa zbudowana w Pythonie, GTK4 i Libadwaita. Program kataloguje systemy RPG, podręczniki, suplementy, sesje, graczy, wydawców oraz gry planszowe i karciane.
 
@@ -6,9 +6,9 @@ Repozytorium wynikowe: https://github.com/Lioheart/Sesyjka
 
 Projekt źródłowy i atrybucja: https://github.com/ZuraffPL/sesyjka
 
-## Sesyjka Cloud 0.9.3
+## Sesyjka Cloud 0.9.6
 
-Sesyjka działa teraz w modelu **offline-first**. Wszystkie dotychczasowe bazy SQLite nadal są lokalnym źródłem danych i program działa bez Internetu. Osobna baza `sync.db` przechowuje wyłącznie stan synchronizacji, identyfikator urządzenia i konflikty. Nie dodaje żadnych kolumn ani tabel do `systemy_rpg.db`, `sesje_rpg.db`, `gracze.db`, `wydawcy.db` ani `planszowe.db`.
+Sesyjka działa teraz w modelu **offline-first**. Wszystkie dotychczasowe bazy SQLite nadal są lokalnym źródłem danych i program działa bez Internetu. Osobna baza `sync.db` przechowuje wyłącznie stan synchronizacji, identyfikator urządzenia i konflikty. Nie dodaje żadnych kolumn ani tabel do `systemy_rpg.db`, `sesje_rpg.db`, `gracze.db`, `wydawcy.db` ani `planszowe.db`. Nowa biblioteka cyfrowa korzysta z osobnego `zasoby.db`, więc cztery bazy projektu źródłowego pozostają bez zmian.
 
 Chmura korzysta z **Supabase Auth** oraz tabeli `sesyjka_records` chronionej przez Row Level Security. Produkcyjny Project URL i publishable key są zapisane w aplikacji. Użytkownik końcowy nie konfiguruje Supabase i po prostu wybiera `Zaloguj przez Discord`. Klucz `secret` ani `service_role` nie może być umieszczany w kliencie desktopowym.
 
@@ -25,7 +25,7 @@ Synchronizacja działa ręcznie oraz automatycznie. Po lokalnej zmianie uruchami
 
 Jeżeli ten sam rekord zmienił się po obu stronach od ostatniej synchronizacji, Sesyjka nie nadpisuje go automatycznie. Okno konfliktów pokazuje lokalny i chmurowy JSON oraz pozwala jawnie wybrać `Zachowaj lokalne` albo `Zachowaj chmurę`. Usunięcia są synchronizowane jako tombstone, dlatego można propagować je między urządzeniami.
 
-Sesyjka nie otrzymuje ani nie zapisuje hasła Discord. Logowanie odbywa się w domyślnej przeglądarce w przepływie OAuth PKCE. Token odświeżania jest chroniony uprawnieniami pliku `0600`, ale w wersji 0.9.3 nie jest szyfrowany przez Sesyjkę. Nie kopiuj pliku sesji między użytkownikami ani urządzeniami. Token sesji jest przechowywany w `${XDG_CONFIG_HOME:-~/.config}/sesyjka/cloud-session.json` z prawami `0600`.
+Sesyjka nie otrzymuje ani nie zapisuje hasła Discord. Logowanie odbywa się w domyślnej przeglądarce w przepływie OAuth PKCE. Token odświeżania jest chroniony uprawnieniami pliku `0600`, ale w wersji 0.9.6 nie jest szyfrowany przez Sesyjkę. Nie kopiuj pliku sesji między użytkownikami ani urządzeniami. Token sesji jest przechowywany w `${XDG_CONFIG_HOME:-~/.config}/sesyjka/cloud-session.json` z prawami `0600`.
 
 ## Funkcje
 
@@ -34,6 +34,15 @@ Zakładka **Systemy RPG** obsługuje hierarchię systemów gry, grup organizacyj
 Formularz pozycji RPG zawsze pokazuje nazwę, typ, system RPG, wydawcę, formaty, język, status gry, status kolekcji, rok wydania i ISBN. Dla suplementów udostępnia wielokrotny wybór podgrup zapisywanych separatorem ` | `: scenariusz lub kampania, rozwinięcie zasad, moduł, lorebook lub sourcebook, bestiariusz oraz starter. Pola cen fizycznej, VTT i PDF pojawiają się tylko dla zaznaczonych formatów. Cena łączna jest liczona automatycznie. Cena sprzedaży jest dostępna wyłącznie dla statusów `Na sprzedaż` i `Sprzedane`. Pole języka korzysta z listy PL, ENG, DE, FR, ES, IT lub Inny. Pole waluty zakupu podpowiada popularne kody PLN, USD, EUR i GBP. ISBN-10 i ISBN-13 są walidowane, ale niepoprawna wartość może zostać zapisana po potwierdzeniu ostrzeżenia.
 
 Zakładka **Sesje RPG** przypisuje sesje do systemów gry. Formularz obsługuje mistrza gry, sesje GM-less, kampanie, jednostrzały, tryb gry, przygody, notatki i grupy graczy. Zapis sesji bez co najmniej jednego istniejącego gracza jest blokowany. Dla zaznaczonej sesji menu `Kalendarz` otwiera w przeglądarce wstępnie wypełnione wydarzenie Google Calendar. Dla Apple/iCloud tworzony jest pojedynczy plik `.ics` w katalogu Pobrane/Downloads i otwierany jest iCloud Calendar. Nadal dostępny jest eksport wszystkich sesji do ICS i CSV.
+
+
+Zakładka **Zasoby cyfrowe** korzysta z osobnej bazy `zasoby.db`. Zasób reprezentuje PDF, zawartość VTT, stronę dostawcy albo inny materiał cyfrowy i może być powiązany z pozycją RPG. Jeden zasób może mieć wiele lokalizacji, na przykład plik na laptopie, kopię na NAS oraz stronę zakupu. Lokalnych plików Sesyjka nie kopiuje do swojej bazy.
+
+Pliki są organizowane przez **magazyny**. Magazyn ma stabilny UUID oraz lokalny katalog bazowy, a lokalizacja zasobu przechowuje tylko ścieżkę względną. Dzięki temu ten sam magazyn logiczny może wskazywać `/mnt/NAS/RPG` na jednym komputerze i `/home/user/NAS/RPG` na drugim. Mapowania katalogów są ustawieniami urządzenia i nie są wysyłane do Cloud. Zasoby oraz ich logiczne lokalizacje są synchronizowane. Jeżeli po synchronizacji pojawi się UUID magazynu nieznany na drugim komputerze, przycisk `Powiąż brakujące` pozwala wskazać odpowiadający mu lokalny katalog.
+
+`Skanuj PDF` indeksuje wybrany katalog rekurencyjnie, liczy SHA-256 i próbuje powiązać plik z pozycją RPG na podstawie nazwy. Automatyczne powiązanie następuje tylko przy wysokiej pewności. Hash pozwala rozpoznać ten sam plik po przeniesieniu i ogranicza duplikaty. Kliknięcie `Otwórz` wybiera preferowaną dostępną lokalizację lokalną, a jeśli jej nie ma, może otworzyć zapisany adres WWW.
+
+Integracja **DriveThruRPG** jest oznaczona jako eksperymentalna. Sesyjka przyjmuje Application Key z włączonym `My Library Access`, pobiera listę zakupów i plików, zapisuje metadane, ISBN, wydawcę, nazwę pliku, dostępne sumy kontrolne i link do produktu, a następnie próbuje powiązać zasób z istniejącą pozycją RPG. Przycisk `Otwórz My Library` prowadzi do aktualnego adresu `https://www.drivethrurpg.com/en/mylibrary`. Duże pliki nie są automatycznie pobierane. Application Key jest zapisywany wyłącznie lokalnie w `${XDG_CONFIG_HOME:-~/.config}/sesyjka/drivethrurpg.json` z prawami `0600` i nie jest synchronizowany do Sesyjka Cloud. Stabilnym rozwiązaniem awaryjnym pozostaje skanowanie katalogu, do którego pobrano bibliotekę DriveThruRPG.
 
 Zakładka **Gry planszowe** korzysta z osobnej bazy `planszowe.db`. Przechowuje gry planszowe i karciane, zakres liczby graczy, czas rozgrywki, minimalny wiek, cenę, walutę, status gry, status kolekcji, wydawcę, rok wydania. Wydawca jest wybierany bezpośrednio z bazy `wydawcy.db`, a jego usunięcie jest blokowane, gdy pozostaje powiązany z grą.
 
@@ -44,6 +53,28 @@ Transfer danych obejmuje eksport ZIP, eksport do folderu, eksport XLSX, eksport 
 Formularz pozycji RPG ma dzielony układ. Około 60% szerokości zajmują pola edycji, a prawa część pokazuje dane znalezione dla ISBN: okładkę, tytuł, rok wydania, wydawcę i ewentualną informacyjną cenę online. Metadane są pobierane na żądanie oraz automatycznie przy otwarciu rekordu z zapisanym ISBN. Puste pola nazwy i roku są uzupełniane automatycznie. Jeżeli wydawca znaleziony online już istnieje w `wydawcy.db`, może zostać automatycznie dopasowany. Istniejące wartości można zastąpić przyciskiem `Użyj danych z ISBN`. Jeśli lokalna cena nie jest podana, dostępna cena z Google Books może zostać pokazana i ręcznie zastosowana do wybranego formatu. Cena Google Books może dotyczyć e-booka i jest jawnie oznaczana jako informacyjna.
 
 Wyszukiwanie ISBN korzysta z publicznego API Biblioteki Narodowej, Open Library oraz Google Books. ISBN jest normalizowany przed wyszukiwaniem, dlatego myślniki i spacje nie mają wpływu na wynik. Program wylicza również odpowiadający ISBN-10 lub ISBN-13 i próbuje oba identyfikatory. Google Books jest przeszukiwane kolejno po `isbn:`, po samym numerze oraz, gdy katalog biblioteczny dostarczy tytuł, także po tytule i wydawcy. Okładki są pobierane z wielu kandydatów. Jeżeli API Google nie zwraca `imageLinks`, program próbuje front cover po identyfikatorze woluminu Google Books. Okładki są zapisywane w `${XDG_CACHE_HOME:-~/.cache}/sesyjka/covers/`, a metadane i informacja o zakończonej próbie pobrania okładki w `${XDG_CACHE_HOME:-~/.cache}/sesyjka/books/`. Automatyczne otwarcie rekordu najpierw korzysta z tego cache. Przycisk `Pobierz z ISBN` wymusza odświeżenie z internetu. Opcjonalnie można ustawić `SESYJKA_GOOGLE_BOOKS_API_KEY`.
+
+## Zmiany w 0.9.6
+
+- naprawiono transport HTTP integracji DriveThruRPG. Sesyjka rozpoznaje i rozpakowuje odpowiedzi `gzip` oraz `deflate`, a jednocześnie domyślnie prosi API o odpowiedź `identity`
+- poprawiono nagłówek autoryzacji dla biblioteki DriveThruRPG do wymaganego formatu `Authorization: Bearer <token>`
+- parser `order_products` został dostosowany do paginowanego formatu JSON:API z polami `links`, `meta`, `data` i `included`
+- nazwa wydawcy jest odczytywana także z obiektów `Publisher` w sekcji `included` na podstawie `royaltyPublisherId`
+- zachowano kompatybilnościowy parser bezpośredniej listy produktów na wypadek starszych wariantów odpowiedzi
+- link `Otwórz My Library` pozostaje ustawiony na `https://www.drivethrurpg.com/en/mylibrary`
+- brak zmian schematów baz danych użytkownika
+
+## Zmiany w 0.9.4
+
+- dodano osobną bazę `zasoby.db` dla PDF, VTT, URL i innych zasobów cyfrowych
+- dodano zakładkę `Zasoby cyfrowe` z sortowaniem, filtrami, otwieraniem zasobów i wieloma lokalizacjami
+- dodano logiczne magazyny `Lokalny`, `NAS` i `USB`, przechowujące ścieżki względne zamiast zależnych od komputera ścieżek absolutnych
+- dodano możliwość mapowania zsynchronizowanego UUID magazynu na inny katalog na kolejnym urządzeniu
+- dodano skanowanie katalogów PDF z SHA-256 i ostrożnym automatycznym dopasowaniem do pozycji RPG
+- dodano eksperymentalną synchronizację metadanych biblioteki DriveThruRPG przez Application Key z `My Library Access`
+- zasoby i logiczne lokalizacje uczestniczą w Sesyjka Cloud, ale lokalne mapowania katalogów i Application Key nie są synchronizowane
+- standardowy eksport/import obejmuje teraz sześć baz użytkownika. `sync.db` nadal pozostaje poza eksportem
+- nie zmieniono schematów czterech baz projektu źródłowego
 
 ## Zmiany w 0.9.3
 
@@ -181,7 +212,7 @@ sync.db
 
 Pierwsze cztery pliki zachowują schematy zgodne z projektem `ZuraffPL/sesyjka`. Nowa funkcja planszówek nie dodaje tabel ani kolumn do tych baz. Jest przechowywana wyłącznie w `planszowe.db`.
 
-Import i tryb gościa nadal akceptują zestaw zawierający tylko cztery oryginalne bazy. W takim przypadku zakładka gier planszowych pozostaje pusta. Eksport tworzony przez wersję 0.9.3 zawiera pięć baz danych użytkownika. `sync.db` nie jest eksportowany, ponieważ zawiera stan konkretnego konta i urządzenia.
+Import i tryb gościa nadal akceptują zestaw zawierający tylko cztery oryginalne bazy. W takim przypadku zakładka gier planszowych pozostaje pusta. Eksport tworzony przez wersję 0.9.6 zawiera sześć baz danych użytkownika, w tym `planszowe.db` i `zasoby.db`. `sync.db` nie jest eksportowany, ponieważ zawiera stan konkretnego konta i urządzenia.
 
 Log diagnostyczny:
 
@@ -326,7 +357,7 @@ python3 -m unittest discover -s tests -v
 bash -n run.sh install-linux.sh uninstall-linux.sh packaging/*.sh
 ```
 
-Testy obejmują CRUD pięciu baz, zgodność zestawu czterech baz projektu źródłowego, walidację sesji, migrację schematu, transfer danych, eksport kalendarza, dynamiczne ceny, statystyki, skrypty instalacyjne, pakowanie Release oraz aktualizator.
+Testy obejmują CRUD sześciu baz domenowych, zgodność zestawu czterech baz projektu źródłowego, walidację sesji, migrację schematu, transfer danych, eksport kalendarza, dynamiczne ceny, statystyki, skrypty instalacyjne, pakowanie Release oraz aktualizator.
 
 ## Licencja
 

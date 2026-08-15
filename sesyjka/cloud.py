@@ -117,6 +117,8 @@ ENTITY_SPECS: tuple[EntitySpec, ...] = (
     EntitySpec("session_players", "sesje_rpg.db", "sesje_gracze", ("sesja_id", "gracz_id"), 60),
     EntitySpec("session_notes", "sesje_rpg.db", "sesje_notatki", ("sesja_id",), 70),
     EntitySpec("board_games", "planszowe.db", "planszowe", ("id",), 80),
+    EntitySpec("digital_resources", "zasoby.db", "zasoby", ("id",), 90),
+    EntitySpec("digital_locations", "zasoby.db", "lokalizacje", ("id",), 100),
 )
 ENTITY_BY_NAME = {spec.name: spec for spec in ENTITY_SPECS}
 

@@ -391,7 +391,7 @@ class ApplicationSourceTests(unittest.TestCase):
         self.assertIn("load_lookup_cache", lookup)
         self.assertIn("force_refresh=force_refresh", source)
         self.assertIn("form.set_margin_end(18)", source)
-        self.assertIn('label="Kolekcja RPG, sesje i gry planszowe"', (self.root / "sesyjka" / "app.py").read_text(encoding="utf-8"))
+        self.assertIn('label="Kolekcja RPG, sesje, gry planszowe i zasoby cyfrowe"', (self.root / "sesyjka" / "app.py").read_text(encoding="utf-8"))
         self.assertIn("XDG_CACHE_HOME", (self.root / "sesyjka" / "config.py").read_text(encoding="utf-8"))
 
 
@@ -407,11 +407,30 @@ class ApplicationSourceTests(unittest.TestCase):
         self.assertIn('databases.own_root / "sync.db"', cloud)
         self.assertIn("SupabaseHttpClient", cloud)
         self.assertIn("sync_conflicts", cloud)
-        self.assertIn('DB_FILES = (*CORE_DB_FILES, "planszowe.db")', config)
+        self.assertIn('DB_FILES = (*CORE_DB_FILES, "planszowe.db", "zasoby.db")', config)
         self.assertNotIn('"sync.db"', config.split("DB_FILES", 1)[1].split("def data_dir", 1)[0])
         self.assertIn("enable row level security", schema.lower())
         self.assertIn("auth.uid()", schema)
         self.assertIn("to authenticated", schema)
+
+    def test_digital_resources_are_a_separate_database_and_page(self) -> None:
+        config = (self.root / "sesyjka" / "config.py").read_text(encoding="utf-8")
+        manager = (self.root / "sesyjka" / "database_manager.py").read_text(encoding="utf-8")
+        app = (self.root / "sesyjka" / "app.py").read_text(encoding="utf-8")
+        page = (self.root / "sesyjka" / "pages" / "digital_resources.py").read_text(encoding="utf-8")
+        cloud = (self.root / "sesyjka" / "cloud.py").read_text(encoding="utf-8")
+        self.assertIn('"zasoby.db"', config)
+        self.assertIn("CREATE TABLE IF NOT EXISTS zasoby", manager)
+        self.assertIn("CREATE TABLE IF NOT EXISTS lokalizacje", manager)
+        self.assertIn("CREATE TABLE IF NOT EXISTS magazyny", manager)
+        self.assertIn('"digital_resources": DigitalResourcesPage', app)
+        self.assertIn('"Zasoby cyfrowe"', app)
+        self.assertIn('label="Skanuj PDF"', page)
+        self.assertIn('label="DriveThruRPG"', page)
+        self.assertIn("DriveThruRPGClient", page)
+        self.assertIn('EntitySpec("digital_resources", "zasoby.db", "zasoby"', cloud)
+        self.assertIn('EntitySpec("digital_locations", "zasoby.db", "lokalizacje"', cloud)
+        self.assertNotIn('EntitySpec("digital_storages"', cloud)
 
     def test_main_title_is_larger_and_cloud_status_is_visible(self) -> None:
         app = (self.root / "sesyjka" / "app.py").read_text(encoding="utf-8")
