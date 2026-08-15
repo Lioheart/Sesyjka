@@ -1,4 +1,4 @@
-# Sesyjka GTK4 0.8.8
+# Sesyjka GTK4 0.8.9
 
 Natywna aplikacja dla Linuksa zbudowana w Pythonie, GTK4 i Libadwaita. Program kataloguje systemy RPG, podręczniki, suplementy, sesje, graczy, wydawców oraz gry planszowe i karciane.
 
@@ -22,7 +22,16 @@ Transfer danych obejmuje eksport ZIP, eksport do folderu, eksport XLSX, eksport 
 
 Formularz pozycji RPG ma dzielony układ. Około 60% szerokości zajmują pola edycji, a prawa część pokazuje dane znalezione dla ISBN: okładkę, tytuł, rok wydania, wydawcę i ewentualną informacyjną cenę online. Metadane są pobierane na żądanie oraz automatycznie przy otwarciu rekordu z zapisanym ISBN. Puste pola nazwy i roku są uzupełniane automatycznie. Jeżeli wydawca znaleziony online już istnieje w `wydawcy.db`, może zostać automatycznie dopasowany. Istniejące wartości można zastąpić przyciskiem `Użyj danych z ISBN`. Jeśli lokalna cena nie jest podana, dostępna cena z Google Books może zostać pokazana i ręcznie zastosowana do wybranego formatu. Cena Google Books może dotyczyć e-booka i jest jawnie oznaczana jako informacyjna.
 
-Wyszukiwanie ISBN korzysta z publicznego API Biblioteki Narodowej, Open Library oraz Google Books. ISBN jest normalizowany przed wyszukiwaniem, dlatego myślniki i spacje nie mają wpływu na wynik. Program wylicza również odpowiadający ISBN-10 lub ISBN-13 i próbuje oba identyfikatory. Google Books jest przeszukiwane kolejno po `isbn:`, po samym numerze oraz, gdy katalog biblioteczny dostarczy tytuł, także po tytule i wydawcy. Okładki są pobierane z wielu kandydatów. Jeżeli API Google nie zwraca `imageLinks`, program próbuje front cover po identyfikatorze woluminu Google Books. Okładki są zapisywane w `${XDG_CACHE_HOME:-~/.cache}/sesyjka/covers/`. Opcjonalnie można ustawić `SESYJKA_GOOGLE_BOOKS_API_KEY`.
+Wyszukiwanie ISBN korzysta z publicznego API Biblioteki Narodowej, Open Library oraz Google Books. ISBN jest normalizowany przed wyszukiwaniem, dlatego myślniki i spacje nie mają wpływu na wynik. Program wylicza również odpowiadający ISBN-10 lub ISBN-13 i próbuje oba identyfikatory. Google Books jest przeszukiwane kolejno po `isbn:`, po samym numerze oraz, gdy katalog biblioteczny dostarczy tytuł, także po tytule i wydawcy. Okładki są pobierane z wielu kandydatów. Jeżeli API Google nie zwraca `imageLinks`, program próbuje front cover po identyfikatorze woluminu Google Books. Okładki są zapisywane w `${XDG_CACHE_HOME:-~/.cache}/sesyjka/covers/`, a metadane i informacja o zakończonej próbie pobrania okładki w `${XDG_CACHE_HOME:-~/.cache}/sesyjka/books/`. Automatyczne otwarcie rekordu najpierw korzysta z tego cache. Przycisk `Pobierz z ISBN` wymusza odświeżenie z internetu. Opcjonalnie można ustawić `SESYJKA_GOOGLE_BOOKS_API_KEY`.
+
+## Zmiany w 0.8.9
+
+- dodano trwałą pamięć podręczną metadanych ISBN w `${XDG_CACHE_HOME:-~/.cache}/sesyjka/books/`. Ponowne otwarcie formularza z tym samym ISBN nie wykonuje kolejnych zapytań HTTP
+- zapamiętywany jest także wynik wyszukiwania okładki, w tym brak obrazu. Ręczny przycisk `Pobierz z ISBN` wymusza ponowne sprawdzenie źródeł internetowych
+- dodano wewnętrzny padding po obu stronach dzielonego edytora pozycji RPG, aby formularz i panel ISBN nie stykały się z separatorem ani krawędziami
+- pod tytułem aplikacji wyświetlany jest opis `Kolekcja RPG, sesje i gry planszowe` zamiast informacji o użytym toolkicie
+- ikona sprawdzania aktualizacji używa `software-update-available-symbolic` z awaryjnym `view-refresh-symbolic`, gdy aktywny motyw ikon nie udostępnia pierwszej nazwy
+- nie zmieniono schematu żadnej bazy SQLite
 
 ## Zmiany w 0.8.8
 
@@ -106,7 +115,7 @@ planszowe.db
 
 Pierwsze cztery pliki zachowują schematy zgodne z projektem `ZuraffPL/sesyjka`. Nowa funkcja planszówek nie dodaje tabel ani kolumn do tych baz. Jest przechowywana wyłącznie w `planszowe.db`.
 
-Import i tryb gościa nadal akceptują zestaw zawierający tylko cztery oryginalne bazy. W takim przypadku zakładka gier planszowych pozostaje pusta. Eksport tworzony przez wersję 0.8.8 zawiera pięć baz.
+Import i tryb gościa nadal akceptują zestaw zawierający tylko cztery oryginalne bazy. W takim przypadku zakładka gier planszowych pozostaje pusta. Eksport tworzony przez wersję 0.8.9 zawiera pięć baz.
 
 Log diagnostyczny:
 

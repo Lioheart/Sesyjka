@@ -474,6 +474,10 @@ class SystemsPage(CrudPage):
 
         form_scroller = Gtk.ScrolledWindow()
         form_scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        form.set_margin_top(12)
+        form.set_margin_bottom(12)
+        form.set_margin_start(12)
+        form.set_margin_end(18)
         form_scroller.set_vexpand(True)
         form_scroller.set_hexpand(True)
         form_scroller.set_child(form)
@@ -481,9 +485,9 @@ class SystemsPage(CrudPage):
         preview = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         preview.add_css_class("isbn-preview")
         preview.set_margin_start(18)
-        preview.set_margin_end(6)
-        preview.set_margin_top(4)
-        preview.set_margin_bottom(4)
+        preview.set_margin_end(12)
+        preview.set_margin_top(12)
+        preview.set_margin_bottom(12)
         preview.set_size_request(360, -1)
 
         preview_heading = Gtk.Label(label="Dane z ISBN", xalign=0.0)
@@ -558,8 +562,9 @@ class SystemsPage(CrudPage):
 
         preview_note = Gtk.Label(
             label=(
-                "Metadane i okładka są pobierane jednorazowo na żądanie. "
-                "Cena online jest informacyjna i może dotyczyć wydania cyfrowego."
+                "Pobrane dane i wynik wyszukiwania okładki są zapisywane lokalnie. "
+                "Kolejne otwarcie korzysta z pamięci podręcznej. Przycisk „Pobierz z ISBN” "
+                "wymusza ponowne sprawdzenie internetu. Cena online jest informacyjna."
             ),
             wrap=True,
             xalign=0.0,
@@ -717,12 +722,24 @@ class SystemsPage(CrudPage):
             apply_metadata_button.set_visible(can_apply_metadata)
             apply_price_button.set_visible(result.has_price() and local_prices_missing())
             if result.has_metadata() or result.has_price():
-                lookup_status.set_text("Pobieranie zakończone.")
+                lookup_status.set_text(
+                    "Dane wczytane z pamięci podręcznej."
+                    if result.from_cache
+                    else "Pobieranie zakończone i zapisane lokalnie."
+                )
             else:
-                lookup_status.set_text("Nie znaleziono danych dla podanego ISBN.")
+                lookup_status.set_text(
+                    "Brak danych zapisany w pamięci podręcznej."
+                    if result.from_cache
+                    else "Nie znaleziono danych. Wynik zapisano lokalnie."
+                )
             return False
 
-        def start_isbn_lookup(_button: Gtk.Button | None = None) -> None:
+        def start_isbn_lookup(
+            _source: Gtk.Widget | None = None,
+            *,
+            force_refresh: bool = False,
+        ) -> None:
             isbn_value = normalize_isbn(isbn.get_text())
             if not isbn_value:
                 lookup_status.set_text("Wpisz numer ISBN.")
@@ -732,13 +749,25 @@ class SystemsPage(CrudPage):
             generation = int(lookup_state["generation"])
             lookup_button.set_sensitive(False)
             lookup_spinner.start()
-            lookup_status.set_text("Pobieranie danych z internetu…")
+            lookup_status.set_text(
+                "Ponowne sprawdzanie danych w internecie…"
+                if force_refresh
+                else "Wczytywanie danych ISBN…"
+            )
             apply_metadata_button.set_visible(False)
             apply_price_button.set_visible(False)
 
             def worker() -> None:
-                result = lookup_book(isbn_value, timeout=6.0)
-                cover = download_cover(result, timeout=6.0)
+                result = lookup_book(
+                    isbn_value,
+                    timeout=6.0,
+                    force_refresh=force_refresh,
+                )
+                cover = download_cover(
+                    result,
+                    timeout=6.0,
+                    force_refresh=force_refresh,
+                )
                 GLib.idle_add(
                     finish_isbn_lookup,
                     generation,
@@ -770,11 +799,17 @@ class SystemsPage(CrudPage):
             apply_metadata_button.set_visible(False)
             apply_price_button.set_visible(False)
 
-        lookup_button.connect("clicked", start_isbn_lookup)
+        lookup_button.connect(
+            "clicked",
+            lambda button: start_isbn_lookup(button, force_refresh=True),
+        )
         apply_metadata_button.connect("clicked", apply_lookup_metadata)
         apply_price_button.connect("clicked", apply_lookup_price)
         isbn.connect("changed", on_isbn_changed)
-        isbn.connect("activate", start_isbn_lookup)
+        isbn.connect(
+            "activate",
+            lambda entry: start_isbn_lookup(entry, force_refresh=True),
+        )
 
         def update_total(*_args: object) -> None:
             total = 0.0

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 import json
 import os
 from pathlib import Path
 import re
+import time
 from typing import Any, Iterable
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlparse
@@ -12,7 +13,7 @@ from urllib.request import Request, urlopen
 
 from .config import cache_dir
 
-USER_AGENT = "Sesyjka/0.8.8 (+https://github.com/Lioheart/Sesyjka)"
+USER_AGENT = "Sesyjka/0.8.9 (+https://github.com/Lioheart/Sesyjka)"
 BN_SEARCH = "https://data.bn.org.pl/api/institutions/bibs.json"
 BN_NETWORK_SEARCH = "https://data.bn.org.pl/api/networks/bibs.json"
 OPEN_LIBRARY_SEARCH = "https://openlibrary.org/search.json"
@@ -20,6 +21,7 @@ OPEN_LIBRARY_COVERS = "https://covers.openlibrary.org/b"
 GOOGLE_BOOKS_SEARCH = "https://www.googleapis.com/books/v1/volumes"
 GOOGLE_BOOKS_CONTENT = "https://books.google.com/books/content"
 MAX_COVER_BYTES = 8 * 1024 * 1024
+BOOK_CACHE_VERSION = 1
 ALLOWED_COVER_HOSTS = {
     "covers.openlibrary.org",
     "books.google.com",
@@ -40,6 +42,8 @@ class BookLookupResult:
     price_kind: str = ""
     price_source: str = ""
     metadata_sources: tuple[str, ...] = ()
+    cover_checked: bool = False
+    from_cache: bool = False
 
     def has_metadata(self) -> bool:
         return bool(self.title or self.published_year or self.publisher or self.cover_url or self.cover_candidates)
@@ -503,19 +507,28 @@ def _merge_many(results: Iterable[BookLookupResult | None], isbn: str) -> BookLo
     )
 
 
-def lookup_book(isbn_value: str, *, timeout: float = 8.0) -> BookLookupResult:
+def lookup_book(
+    isbn_value: str,
+    *,
+    timeout: float = 8.0,
+    force_refresh: bool = False,
+) -> BookLookupResult:
     """Pobiera metadane wydania na podstawie ISBN z kilku niezależnych źródeł.
 
-    ISBN jest zawsze normalizowany przed wyszukiwaniem, więc myślniki i spacje
-    nie wpływają na wynik. Dla polskich wydań najpierw pytamy publiczne API
-    Biblioteki Narodowej. Open Library oraz Google Books uzupełniają metadane,
-    okładkę i ewentualną cenę. Google Books jest dodatkowo przeszukiwane po
-    tytule/wydawcy, gdy wyszukiwanie ``isbn:`` nie zwróci właściwego woluminu.
+    Domyślnie najpierw korzysta z trwałej pamięci podręcznej XDG. Dzięki temu
+    ponowne otwarcie formularza nie wykonuje kolejnych zapytań HTTP. Ręczne
+    użycie przycisku „Pobierz z ISBN” przekazuje ``force_refresh=True`` i
+    zastępuje zapisany wynik świeżymi danymi.
     """
 
     isbn = normalize_isbn(isbn_value)
     if not isbn:
         return BookLookupResult(isbn="")
+
+    if not force_refresh:
+        cached = load_lookup_cache(isbn)
+        if cached is not None:
+            return cached
 
     bn = _bn_result(isbn, timeout=timeout)
     ol = _open_library_result(isbn, timeout=timeout)
@@ -538,7 +551,81 @@ def lookup_book(isbn_value: str, *, timeout: float = 8.0) -> BookLookupResult:
     all_covers = _unique_urls((*result.covers(), *fallback))
     result.cover_url = all_covers[0] if all_covers else ""
     result.cover_candidates = tuple(all_covers[1:])
+    result.from_cache = False
+    save_lookup_cache(result)
     return result
+
+
+def metadata_cache_path(isbn_value: str) -> Path:
+    """Zwraca plik trwałej pamięci podręcznej metadanych dla ISBN."""
+    isbn = normalize_isbn(isbn_value) or "unknown"
+    folder = cache_dir() / "books"
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder / f"{isbn}.json"
+
+
+def save_lookup_cache(result: BookLookupResult) -> None:
+    """Zapisuje wynik atomowo poza bazami kompatybilnymi z projektem źródłowym."""
+    if not normalize_isbn(result.isbn):
+        return
+    target = metadata_cache_path(result.isbn)
+    payload = asdict(result)
+    payload["cover_candidates"] = list(result.cover_candidates)
+    payload["metadata_sources"] = list(result.metadata_sources)
+    payload["from_cache"] = False
+    document = {
+        "version": BOOK_CACHE_VERSION,
+        "cached_at": int(time.time()),
+        "result": payload,
+    }
+    temporary = target.with_suffix(".tmp")
+    try:
+        temporary.write_text(
+            json.dumps(document, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        temporary.replace(target)
+    except OSError:
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+def load_lookup_cache(isbn_value: str) -> BookLookupResult | None:
+    """Wczytuje zapisany wynik. Cache nie wygasa sam, ręczne pobranie go odświeża."""
+    target = metadata_cache_path(isbn_value)
+    try:
+        document = json.loads(target.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return None
+    if not isinstance(document, dict) or document.get("version") != BOOK_CACHE_VERSION:
+        return None
+    payload = document.get("result")
+    if not isinstance(payload, dict):
+        return None
+    cached_isbn = normalize_isbn(payload.get("isbn") or "")
+    requested_isbn = normalize_isbn(isbn_value)
+    if not cached_isbn or cached_isbn != requested_isbn:
+        return None
+    try:
+        return BookLookupResult(
+            isbn=cached_isbn,
+            title=str(payload.get("title") or ""),
+            published_year=str(payload.get("published_year") or ""),
+            publisher=str(payload.get("publisher") or ""),
+            cover_url=str(payload.get("cover_url") or ""),
+            cover_candidates=tuple(str(value) for value in payload.get("cover_candidates") or () if value),
+            price_amount=(float(payload["price_amount"]) if payload.get("price_amount") not in (None, "") else None),
+            price_currency=str(payload.get("price_currency") or ""),
+            price_kind=str(payload.get("price_kind") or ""),
+            price_source=str(payload.get("price_source") or ""),
+            metadata_sources=tuple(str(value) for value in payload.get("metadata_sources") or () if value),
+            cover_checked=bool(payload.get("cover_checked", False)),
+            from_cache=True,
+        )
+    except (TypeError, ValueError):
+        return None
 
 
 def cover_cache_path(isbn_value: str) -> Path:
@@ -574,10 +661,22 @@ def _download_image(url: str, *, timeout: float) -> bytes | None:
     return payload
 
 
-def download_cover(result: BookLookupResult, *, timeout: float = 8.0) -> Path | None:
+def download_cover(
+    result: BookLookupResult,
+    *,
+    timeout: float = 8.0,
+    force_refresh: bool = False,
+) -> Path | None:
     target = cover_cache_path(result.isbn)
-    if target.is_file() and target.stat().st_size > 0:
+    if target.is_file() and target.stat().st_size > 0 and not force_refresh:
+        result.cover_checked = True
+        save_lookup_cache(result)
         return target
+
+    # Zapamiętujemy również brak okładki. Bez tego każde otwarcie rekordu
+    # ponownie pytałoby wszystkie źródła o obraz, który poprzednio nie istniał.
+    if result.cover_checked and not force_refresh:
+        return target if target.is_file() and target.stat().st_size > 0 else None
 
     # Nie kończymy na pierwszym URL. Brak okładki w Open Library nie powinien
     # blokować kolejnej próby przez Google Books i odwrotnie.
@@ -595,5 +694,12 @@ def download_cover(result: BookLookupResult, *, timeout: float = 8.0) -> Path | 
             except OSError:
                 pass
             continue
+        result.cover_checked = True
+        save_lookup_cache(result)
+        return target
+
+    result.cover_checked = True
+    save_lookup_cache(result)
+    if target.is_file() and target.stat().st_size > 0:
         return target
     return None

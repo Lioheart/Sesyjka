@@ -168,7 +168,7 @@ class SesyjkaWindow(Adw.ApplicationWindow):
 
         self.header = Adw.HeaderBar()
         if hasattr(Adw, "WindowTitle"):
-            title = Adw.WindowTitle(title=APP_NAME, subtitle="GTK4 i Libadwaita")
+            title = Adw.WindowTitle(title=APP_NAME, subtitle="Kolekcja RPG, sesje i gry planszowe")
         else:
             title = Gtk.Label(label=APP_NAME)
             title.add_css_class("title")
@@ -212,7 +212,13 @@ class SesyjkaWindow(Adw.ApplicationWindow):
         theme_box.append(self.dark_switch)
         self.header.pack_end(theme_box)
 
-        self.update_button = Gtk.Button.new_from_icon_name("software-update-available")
+        update_icon_name = "software-update-available-symbolic"
+        display = Gdk.Display.get_default()
+        if display is not None:
+            icon_theme = Gtk.IconTheme.get_for_display(display)
+            if not icon_theme.has_icon(update_icon_name):
+                update_icon_name = "view-refresh-symbolic"
+        self.update_button = Gtk.Button.new_from_icon_name(update_icon_name)
         self.update_button.set_tooltip_text("Sprawdź aktualizacje")
         self.update_button.connect("clicked", lambda _button: self.check_for_updates(manual=True))
         self.header.pack_end(self.update_button)
@@ -586,6 +592,9 @@ class SesyjkaWindow(Adw.ApplicationWindow):
     def show_history(self) -> None:
         dialog = ModalWindow(self, "Historia zmian", width=720, height=620)
         history_text = (
+            "0.8.9\n"
+            "Dodano trwały cache metadanych ISBN i informacji o braku okładki, dzięki czemu ponowne otwarcie formularza nie wykonuje kolejnych zapytań sieciowych. "
+            "Przycisk Pobierz z ISBN wymusza ręczne odświeżenie danych. Dodano wewnętrzny padding formularza, krótki opis aplikacji w nagłówku oraz bezpieczny fallback ikony aktualizacji.\n\n"
             "0.8.8\n"
             "Dodano dzielony formularz pozycji RPG z panelem ISBN po prawej stronie. Open Library dostarcza metadane i okładki, "
             "a Google Books uzupełnia dane i może podać informacyjną cenę online. Puste pola nazwy i roku są uzupełniane automatycznie, "

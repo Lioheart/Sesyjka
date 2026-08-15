@@ -2,5 +2,5 @@
 
 APP_ID = "io.github.zuraffpl.Sesyjka"
 APP_NAME = "Sesyjka"
-APP_VERSION = "0.8.8"
+APP_VERSION = "0.8.9"
 UPDATE_REPOSITORY = "Lioheart/Sesyjka"

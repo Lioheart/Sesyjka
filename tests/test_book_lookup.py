@@ -175,6 +175,71 @@ class BookLookupTests(unittest.TestCase):
         self.assertEqual(result.price_currency, "EUR")
         self.assertEqual(result.metadata_sources, ("Open Library", "Google Books"))
 
+
+    def test_lookup_cache_roundtrip_avoids_network_on_second_open(self) -> None:
+        cached = book_lookup.BookLookupResult(
+            isbn="9788396012111",
+            title="Podręcznik gracza",
+            published_year="2024",
+            publisher="Stowarzyszenie Topory",
+            cover_url="https://books.google.com/books/content?id=test&img=1&zoom=3",
+            metadata_sources=("Biblioteka Narodowa",),
+            cover_checked=True,
+        )
+        with tempfile.TemporaryDirectory() as directory, patch.dict(
+            os.environ, {"SESYJKA_CACHE_DIR": directory}
+        ):
+            book_lookup.save_lookup_cache(cached)
+            with patch.object(book_lookup, "_bn_result", side_effect=AssertionError("network called")):
+                result = book_lookup.lookup_book("978-83-960121-1-1", timeout=1)
+        self.assertTrue(result.from_cache)
+        self.assertTrue(result.cover_checked)
+        self.assertEqual(result.title, "Podręcznik gracza")
+        self.assertEqual(result.publisher, "Stowarzyszenie Topory")
+
+    def test_force_refresh_bypasses_lookup_cache(self) -> None:
+        cached = book_lookup.BookLookupResult(isbn="9788396012111", title="Stary tytuł")
+        fresh = book_lookup.BookLookupResult(
+            isbn="9788396012111",
+            title="Nowy tytuł",
+            metadata_sources=("Biblioteka Narodowa",),
+        )
+        with tempfile.TemporaryDirectory() as directory, patch.dict(
+            os.environ, {"SESYJKA_CACHE_DIR": directory}
+        ):
+            book_lookup.save_lookup_cache(cached)
+            with patch.object(book_lookup, "_bn_result", return_value=fresh), patch.object(
+                book_lookup, "_open_library_result", return_value=None
+            ), patch.object(book_lookup, "_google_books_result", return_value=None):
+                result = book_lookup.lookup_book(
+                    "9788396012111", timeout=1, force_refresh=True
+                )
+                reread = book_lookup.load_lookup_cache("9788396012111")
+        self.assertFalse(result.from_cache)
+        self.assertEqual(result.title, "Nowy tytuł")
+        assert reread is not None
+        self.assertEqual(reread.title, "Nowy tytuł")
+
+    def test_missing_cover_is_cached_and_not_downloaded_again(self) -> None:
+        result = book_lookup.BookLookupResult(
+            isbn="9788396012111",
+            cover_url="https://covers.openlibrary.org/b/isbn/9788396012111-L.jpg?default=false",
+            cover_checked=True,
+        )
+        with tempfile.TemporaryDirectory() as directory, patch.dict(
+            os.environ, {"SESYJKA_CACHE_DIR": directory}
+        ), patch.object(book_lookup, "_download_image", side_effect=AssertionError("cover network called")):
+            path = book_lookup.download_cover(result, timeout=1)
+        self.assertIsNone(path)
+
+    def test_metadata_cache_uses_xdg_cache_override(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, patch.dict(
+            os.environ, {"SESYJKA_CACHE_DIR": directory}
+        ):
+            path = book_lookup.metadata_cache_path("978-83-7418-231-7")
+            self.assertEqual(path.parent, Path(directory) / "books")
+            self.assertEqual(path.name, "9788374182317.json")
+
     def test_cover_cache_uses_xdg_cache_override(self) -> None:
         with tempfile.TemporaryDirectory() as directory, patch.dict(
             os.environ, {"SESYJKA_CACHE_DIR": directory}

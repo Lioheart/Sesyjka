@@ -255,8 +255,9 @@ class ApplicationSourceTests(unittest.TestCase):
         dialogs = (self.root / "sesyjka" / "dialogs.py").read_text(encoding="utf-8")
         self.assertIn('Gtk.Button.new_from_icon_name("document-save-symbolic")', app)
         self.assertNotIn('Gtk.Button.new_from_icon_name("database")', app)
-        self.assertIn('Gtk.Button.new_from_icon_name("software-update-available")', app)
-        self.assertNotIn('Gtk.Button.new_from_icon_name("software-update-available-symbolic")', app)
+        self.assertIn('update_icon_name = "software-update-available-symbolic"', app)
+        self.assertIn('update_icon_name = "view-refresh-symbolic"', app)
+        self.assertIn('icon_theme.has_icon(update_icon_name)', app)
         self.assertIn('confirm_label="Zaimportuj"', transfer)
         self.assertIn('destructive=False', transfer)
         self.assertIn('confirm_label: str = "Usuń"', dialogs)
@@ -352,6 +353,11 @@ class ApplicationSourceTests(unittest.TestCase):
         self.assertIn("publisher", lookup)
         self.assertIn('label="Użyj danych z ISBN"', source)
         self.assertIn("price_amount", lookup)
+        self.assertIn("metadata_cache_path", lookup)
+        self.assertIn("load_lookup_cache", lookup)
+        self.assertIn("force_refresh=force_refresh", source)
+        self.assertIn("form.set_margin_end(18)", source)
+        self.assertIn('subtitle="Kolekcja RPG, sesje i gry planszowe"', (self.root / "sesyjka" / "app.py").read_text(encoding="utf-8"))
         self.assertIn("XDG_CACHE_HOME", (self.root / "sesyjka" / "config.py").read_text(encoding="utf-8"))
 
 
