@@ -15,8 +15,13 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
 from . import APP_ID, APP_NAME, APP_VERSION, UPDATE_REPOSITORY
 from .cloud import CloudAuthError, CloudError, CloudOfflineError, CloudService, Conflict, DEFAULT_SYNC_INTERVAL
-from .oauth import OAUTH_CALLBACK_HOST, OAUTH_CALLBACK_PATH, OAUTH_CALLBACK_PORT
-from .config import load_settings, migrate_legacy_databases, save_settings
+from .config import (
+    DEFAULT_SUPABASE_PUBLISHABLE_KEY,
+    DEFAULT_SUPABASE_URL,
+    load_settings,
+    migrate_legacy_databases,
+    save_settings,
+)
 from .database_manager import DatabaseManager
 from .dialogs import ModalWindow, info
 from .pages import BoardGamesPage, PlayersPage, PublishersPage, SessionsPage, StatisticsPage, SystemsPage
@@ -434,8 +439,11 @@ class SesyjkaWindow(Adw.ApplicationWindow):
             LOG.exception("Nie udało się zapisać ustawień")
 
     def _cloud_config_values(self) -> tuple[str, str]:
-        url = os.environ.get("SESYJKA_SUPABASE_URL") or str(self.settings_data.get("cloud_supabase_url", ""))
-        key = os.environ.get("SESYJKA_SUPABASE_KEY") or str(self.settings_data.get("cloud_publishable_key", ""))
+        # Produkcyjny backend Sesyjka Cloud jest częścią konfiguracji aplikacji.
+        # Zmienne środowiskowe pozostają wyłącznie jako override dla developmentu
+        # i testów, dzięki czemu zwykły użytkownik nie konfiguruje Supabase.
+        url = os.environ.get("SESYJKA_SUPABASE_URL", DEFAULT_SUPABASE_URL)
+        key = os.environ.get("SESYJKA_SUPABASE_KEY", DEFAULT_SUPABASE_PUBLISHABLE_KEY)
         return url.strip(), key.strip()
 
     def _cloud_configured(self) -> bool:
@@ -623,36 +631,6 @@ class SesyjkaWindow(Adw.ApplicationWindow):
         dialog.root_box.append(heading)
         dialog.root_box.append(description)
 
-        config_frame = Gtk.Frame(label="Połączenie Supabase")
-        config_grid = Gtk.Grid(column_spacing=10, row_spacing=10)
-        config_grid.set_margin_top(12)
-        config_grid.set_margin_bottom(12)
-        config_grid.set_margin_start(12)
-        config_grid.set_margin_end(12)
-        url_entry = Gtk.Entry()
-        url_entry.set_hexpand(True)
-        url_entry.set_placeholder_text("https://<project-ref>.supabase.co")
-        key_entry = Gtk.Entry()
-        key_entry.set_hexpand(True)
-        key_entry.set_placeholder_text("Publishable key")
-        current_url, current_key = self._cloud_config_values()
-        url_entry.set_text(current_url)
-        key_entry.set_text(current_key)
-        config_grid.attach(Gtk.Label(label="Project URL", xalign=0.0), 0, 0, 1, 1)
-        config_grid.attach(url_entry, 1, 0, 1, 1)
-        config_grid.attach(Gtk.Label(label="Publishable key", xalign=0.0), 0, 1, 1, 1)
-        config_grid.attach(key_entry, 1, 1, 1, 1)
-        callback_uri = f"http://{OAUTH_CALLBACK_HOST}:{OAUTH_CALLBACK_PORT}{OAUTH_CALLBACK_PATH}"
-        callback_label = Gtk.Label(label=callback_uri, xalign=0.0, selectable=True)
-        callback_label.add_css_class("dim-label")
-        config_grid.attach(Gtk.Label(label="Redirect URL", xalign=0.0), 0, 2, 1, 1)
-        config_grid.attach(callback_label, 1, 2, 1, 1)
-        save_config = Gtk.Button(label="Zapisz konfigurację")
-        save_config.set_halign(Gtk.Align.END)
-        config_grid.attach(save_config, 1, 3, 1, 1)
-        config_frame.set_child(config_grid)
-        dialog.root_box.append(config_frame)
-
         account_frame = Gtk.Frame(label="Konto użytkownika")
         account_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         account_box.set_margin_top(12)
@@ -664,31 +642,6 @@ class SesyjkaWindow(Adw.ApplicationWindow):
 
         status = Gtk.Label(wrap=True, xalign=0.0)
         account_box.append(status)
-
-        def persist_config(_button: Gtk.Button | None = None) -> bool:
-            try:
-                from .cloud import CloudConfig
-                config = CloudConfig.from_values(url_entry.get_text(), key_entry.get_text())
-            except ValueError as exc:
-                status.set_text(str(exc))
-                status.add_css_class("error")
-                return False
-            previous_url, previous_key = self._cloud_config_values()
-            if self.cloud.signed_in and (config.url != previous_url or config.publishable_key != previous_key):
-                status.set_text("Wyloguj się przed zmianą projektu Supabase lub klucza publishable.")
-                status.add_css_class("error")
-                return False
-            status.remove_css_class("error")
-            self.settings_data["cloud_supabase_url"] = config.url
-            self.settings_data["cloud_publishable_key"] = config.publishable_key
-            self._save_current_settings()
-            self._cloud_last_error = ""
-            self._cloud_last_error_kind = ""
-            self._update_cloud_status()
-            status.set_text("Konfiguracja Supabase została zapisana.")
-            return True
-
-        save_config.connect("clicked", persist_config)
 
         if not self.cloud.signed_in:
             login_info = Gtk.Label(
@@ -707,8 +660,6 @@ class SesyjkaWindow(Adw.ApplicationWindow):
             account_box.append(signin)
 
             def auth_discord(_button: Gtk.Button) -> None:
-                if not persist_config():
-                    return
                 signin.set_sensitive(False)
                 status.remove_css_class("error")
                 status.set_text("Otwieranie Discord w przeglądarce. Po zalogowaniu wróć do Sesyjki…")
@@ -795,8 +746,6 @@ class SesyjkaWindow(Adw.ApplicationWindow):
             conflicts.connect("clicked", lambda _button: (dialog.close(), self.show_cloud_conflicts()))
 
             def logout_clicked(_button: Gtk.Button) -> None:
-                if not persist_config():
-                    return
                 url, key = self._cloud_config_values()
                 logout.set_sensitive(False)
                 status.set_text("Wylogowywanie…")
@@ -1136,7 +1085,7 @@ class SesyjkaWindow(Adw.ApplicationWindow):
             "Ctrl+N dodaje rekord w aktywnej zakładce. Ctrl+R odświeża dane. Ctrl+Q zamyka program. "
             "Dwuklik edytuje rekord, a prawy przycisk myszy otwiera menu kontekstowe.\n\n"
             "SESYJKA CLOUD\n"
-            "Przycisk Cloud w nagłówku otwiera konfigurację backendu, logowanie przez Discord, ręczną synchronizację i konflikty. "
+            "Przycisk Cloud w nagłówku otwiera logowanie przez Discord, ręczną synchronizację i konflikty. Backend Sesyjka Cloud jest skonfigurowany w aplikacji. "
             "Dane są nadal zapisywane najpierw lokalnie, więc brak Internetu nie blokuje pracy. Automatyczna synchronizacja "
             "uruchamia się po zmianach i okresowo. Stan mapowań jest przechowywany w osobnej bazie sync.db.\n\n"
             "AKTUALIZACJE\n"
@@ -1159,6 +1108,8 @@ class SesyjkaWindow(Adw.ApplicationWindow):
     def show_history(self) -> None:
         dialog = ModalWindow(self, "Historia zmian", width=720, height=620)
         history_text = (
+            "0.9.2\n"
+            "Backend Sesyjka Cloud jest skonfigurowany bezpośrednio w aplikacji, a GUI nie wymaga Project URL ani klucza Supabase. Dodano szybkie dodawanie zaznaczonej sesji do Google Calendar w przeglądarce oraz eksport pojedynczej sesji do ICS z otwarciem iCloud Calendar dla użytkowników Apple.\n\n"
             "0.9.1\n"
             "Logowanie Sesyjka Cloud odbywa się przez konto Discord w bezpiecznym przepływie OAuth PKCE. Po poprawnej autoryzacji synchronizacja uruchamia się automatycznie. Dodano lokalny callback tylko na 127.0.0.1 oraz czytelniejszy komunikat dla niewdrożonego backendu Supabase.\n\n"
             "0.9.0\n"

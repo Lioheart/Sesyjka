@@ -10,6 +10,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from .database_manager import DatabaseManager
+from .calendar_integration import session_description, session_summary
 
 
 def _clean(value: Any) -> Any:
@@ -786,19 +787,7 @@ class Repository:
 
     @staticmethod
     def _calendar_description(session: dict[str, Any]) -> str:
-        details = [
-            f"System: {session.get('system_nazwa') or ''}",
-            f"Mistrz gry: {session.get('mg_nazwa') or 'Brak, sesja GM-less'}",
-            f"Gracze: {session.get('gracze_nazwy') or ''}",
-            f"Tryb: {session.get('tryb_gry') or ''}",
-        ]
-        if session.get("tytul_kampanii"):
-            details.append(f"Kampania: {session['tytul_kampanii']}")
-        if session.get("tytul_przygody"):
-            details.append(f"Przygoda: {session['tytul_przygody']}")
-        if session.get("notatka"):
-            details.extend(("", str(session["notatka"])))
-        return "\n".join(details)
+        return session_description(session)
 
     @staticmethod
     def _ics_escape(value: str) -> str:
@@ -810,6 +799,33 @@ class Repository:
             .replace("\n", "\\n")
             .replace("\r", "\\n")
         )
+
+    def export_session_ics(self, session: dict[str, Any], destination: Path) -> Path:
+        destination = Path(destination)
+        if destination.suffix.lower() != ".ics":
+            destination = destination.with_suffix(".ics")
+        event_date = datetime.strptime(str(session["data_sesji"]), "%Y-%m-%d").date()
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        lines = [
+            "BEGIN:VCALENDAR",
+            "VERSION:2.0",
+            "PRODID:-//Lioheart//Sesyjka GTK4//PL",
+            "CALSCALE:GREGORIAN",
+            "METHOD:PUBLISH",
+            "BEGIN:VEVENT",
+            f"UID:sesyjka-session-{int(session['id'])}@github.com/Lioheart/Sesyjka",
+            f"DTSTAMP:{timestamp}",
+            f"DTSTART;VALUE=DATE:{event_date.strftime('%Y%m%d')}",
+            f"DTEND;VALUE=DATE:{(event_date + timedelta(days=1)).strftime('%Y%m%d')}",
+            f"SUMMARY:{self._ics_escape(session_summary(session))}",
+            f"DESCRIPTION:{self._ics_escape(self._calendar_description(session))}",
+            "TRANSP:TRANSPARENT",
+            "END:VEVENT",
+            "END:VCALENDAR",
+        ]
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text("\r\n".join(lines) + "\r\n", encoding="utf-8")
+        return destination
 
     def export_sessions_ics(self, destination: Path) -> Path:
         destination = Path(destination)
@@ -826,7 +842,7 @@ class Repository:
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         for session in self.sessions():
             event_date = datetime.strptime(str(session["data_sesji"]), "%Y-%m-%d").date()
-            summary = f"Sesja RPG: {session.get('system_nazwa') or 'Bez systemu'}"
+            summary = session_summary(session)
             lines.extend(
                 [
                     "BEGIN:VEVENT",

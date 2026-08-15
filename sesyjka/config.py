@@ -10,6 +10,9 @@ APP_DIR_NAME = "sesyjka"
 CORE_DB_FILES = ("systemy_rpg.db", "sesje_rpg.db", "gracze.db", "wydawcy.db")
 DB_FILES = (*CORE_DB_FILES, "planszowe.db")
 
+DEFAULT_SUPABASE_URL = "https://rjevhlnscdodgoaztxao.supabase.co"
+DEFAULT_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_AfaZRdfEWMi9QSMOjXgoRA_6zA6W7Yn"
+
 
 def data_dir() -> Path:
     override = os.environ.get("SESYJKA_DATA_DIR")
@@ -68,8 +71,6 @@ def load_settings() -> dict[str, Any]:
         "maximized": False,
         "check_updates": True,
         "last_update_check": 0,
-        "cloud_supabase_url": "",
-        "cloud_publishable_key": "",
         "cloud_auto_sync": True,
         "cloud_sync_interval": 300,
     }

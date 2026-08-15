@@ -37,7 +37,8 @@ class CrudPage(Gtk.Box):
         self.set_margin_start(12)
         self.set_margin_end(12)
 
-        toolbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        self.toolbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        toolbar = self.toolbar
         self.search = Gtk.SearchEntry()
         self.search.set_placeholder_text("Filtruj całą tabelę")
         self.search.set_hexpand(True)

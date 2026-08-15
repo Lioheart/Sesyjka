@@ -1,4 +1,4 @@
-# Sesyjka GTK4 0.9.1
+# Sesyjka GTK4 0.9.2
 
 A native Linux application built with Python, GTK4 and Libadwaita. It manages tabletop RPG systems, books, supplements, sessions, players, publishers, board games and card games. The four original SQLite databases remain compatible, while board and card games use a separate fifth database.
 
@@ -6,15 +6,24 @@ Result repository: https://github.com/Lioheart/Sesyjka
 
 Original project and attribution: https://github.com/ZuraffPL/sesyjka
 
-## Sesyjka Cloud 0.9.1
+## Sesyjka Cloud 0.9.2
 
-Version 0.9.1 uses Discord OAuth for the optional offline-first cloud synchronization. Existing SQLite databases remain the local source of truth and keep their current schemas. A separate `sync.db` stores synchronization mappings, device state and unresolved conflicts.
+Version 0.9.2 uses Discord OAuth for the optional offline-first cloud synchronization. Existing SQLite databases remain the local source of truth and keep their current schemas. A separate `sync.db` stores synchronization mappings, device state and unresolved conflicts.
 
-The cloud backend uses Supabase Auth and the Supabase Data REST API. Run `supabase/schema.sql` in a Supabase project, then open the Cloud control in the application header and enter the Project URL and a publishable key. Never use a secret/service-role key in the desktop client.
+The cloud backend uses Supabase Auth and the Supabase Data REST API. The production Project URL and publishable key are bundled with the application, so end users only need to choose Discord login. Run `supabase/schema.sql` once on the production backend. Never use a secret/service-role key in the desktop client.
 
 The application signs users in through Discord OAuth in the default browser, refreshes the resulting Supabase session, synchronizes manually or automatically, continues working offline, and explicitly resolves records that changed both locally and remotely. The header shows the current cloud state and conflict count.
 
-See `supabase/README.md` for setup instructions. Discord passwords never reach Sesyjka. Authentication takes place in the default browser using OAuth PKCE. The refresh token is stored in the user configuration directory with file mode `0600`, but version 0.9.1 does not encrypt that file itself.
+See `supabase/README.md` for setup instructions. Discord passwords never reach Sesyjka. Authentication takes place in the default browser using OAuth PKCE. The refresh token is stored in the user configuration directory with file mode `0600`, but version 0.9.2 does not encrypt that file itself.
+
+## Changes in 0.9.2
+
+- bundled the production Supabase URL and publishable key and removed backend configuration fields from the GUI
+- retained environment-variable overrides for development and testing
+- added a Calendar menu for the selected RPG session
+- Google Calendar opens a pre-filled browser event form
+- Apple/iCloud handoff writes a single-event ICS file to Downloads and opens iCloud Calendar
+- original user database schemas remain unchanged
 
 ## Changes in 0.9.1
 
@@ -22,7 +31,6 @@ See `supabase/README.md` for setup instructions. Discord passwords never reach S
 - added OAuth Authorization Code with PKCE S256 and a loopback-only callback at `127.0.0.1:8765`
 - the first Discord login creates the Supabase Auth user automatically
 - successful login immediately starts cloud synchronization
-- original user database schemas remain unchanged
 
 ## Changes in 0.9.0
 

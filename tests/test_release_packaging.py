@@ -43,7 +43,7 @@ class ReleasePackagingTests(unittest.TestCase):
         self.assertIsNotNone(project_match)
         self.assertIsNotNone(app_match)
         self.assertEqual(project_match.group(1), app_match.group(1))
-        self.assertEqual(project_match.group(1), "0.9.1")
+        self.assertEqual(project_match.group(1), "0.9.2")
 
     def test_github_actions_use_existing_major_versions(self) -> None:
         ci = (self.root / ".github/workflows/ci.yml").read_text(encoding="utf-8")
@@ -82,7 +82,7 @@ class ReleasePackagingTests(unittest.TestCase):
             self.root / "data/io.github.zuraffpl.Sesyjka.metainfo.xml"
         ).read_text(encoding="utf-8")
         self.assertIn("https://github.com/Lioheart/Sesyjka", metainfo)
-        self.assertIn('<release version="0.9.1"', metainfo)
+        self.assertIn('<release version="0.9.2"', metainfo)
         self.assertNotIn("github.com/ZuraffPL/sesyjka", metainfo)
 
 

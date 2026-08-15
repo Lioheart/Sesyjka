@@ -38,47 +38,53 @@
   <url type="vcs-browser">https://github.com/Lioheart/Sesyjka</url>
   <screenshots>
     <screenshot type="default" xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.9.1/screenshots/image.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.9.2/screenshots/image.png</image>
       <caption>Przeglądaj systemy RPG i hierarchiczną kolekcję podręczników</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.9.1/screenshots/image2.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.9.2/screenshots/image2.png</image>
       <caption>Edytuj lub usuwaj rekordy z menu kontekstowego</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.9.1/screenshots/image4.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.9.2/screenshots/image4.png</image>
       <caption>Dodawaj systemy gry i przypisuj wydawców</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.9.1/screenshots/image5.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.9.2/screenshots/image5.png</image>
       <caption>Twórz wydawcę bez zamykania aktualnego formularza</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.9.1/screenshots/image6.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.9.2/screenshots/image6.png</image>
       <caption>Zapisuj sesje z systemami, graczami, kampaniami i notatkami</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.9.1/screenshots/image7.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.9.2/screenshots/image7.png</image>
       <caption>Zarządzaj katalogiem graczy i tagami grup</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.9.1/screenshots/image8.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.9.2/screenshots/image8.png</image>
       <caption>Zarządzaj danymi wydawców i ich stronami internetowymi</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.9.1/screenshots/image9.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.9.2/screenshots/image9.png</image>
       <caption>Analizuj statystyki kolekcji i sesji w jasnym motywie</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.9.1/screenshots/image10.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.9.2/screenshots/image10.png</image>
       <caption>Korzystaj z pełnego interfejsu w ciemnym motywie Adwaita</caption>
     </screenshot>
     <screenshot xml:lang="pl">
-      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.9.1/screenshots/image11.png</image>
+      <image>https://raw.githubusercontent.com/Lioheart/Sesyjka/v0.9.2/screenshots/image11.png</image>
       <caption>Eksportuj i importuj bazy oraz przeglądaj je w trybie gościa</caption>
     </screenshot>
   </screenshots>
   <releases>
+    <release version="0.9.2" date="2026-08-15">
+      <description>
+        <p>Bundled the production Sesyjka Cloud endpoint and publishable key so end users no longer configure Supabase. Added one-click Google Calendar event templates and Apple/iCloud Calendar handoff through a generated single-event ICS file.</p>
+        <p xml:lang="pl">Wbudowano produkcyjny endpoint i klucz publishable Sesyjka Cloud, dzięki czemu użytkownik nie konfiguruje Supabase. Dodano szybkie tworzenie wydarzenia Google Calendar i przekazanie pojedynczej sesji do Apple/iCloud Calendar przez plik ICS.</p>
+      </description>
+    </release>
     <release version="0.9.1" date="2026-08-15">
       <description>
         <p>Replaced password login with Discord OAuth using PKCE and a localhost-only callback. Successful OAuth login immediately starts the existing offline-first synchronization.</p>

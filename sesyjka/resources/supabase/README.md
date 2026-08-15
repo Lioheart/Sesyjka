@@ -1,4 +1,4 @@
-# Sesyjka Cloud 0.9.1 - konfiguracja Supabase i Discord
+# Sesyjka Cloud 0.9.2 - konfiguracja Supabase i Discord
 
 Konfigurację wykonuje administrator projektu Sesyjka tylko raz. Użytkownik końcowy loguje się przyciskiem `Zaloguj przez Discord` i nie wykonuje żadnego SQL ani nie konfiguruje Discord Developer Portal.
 
@@ -79,10 +79,19 @@ NOTIFY pgrst, 'reload schema';
 
 ## 6. Konfiguracja klienta
 
-Na etapie testów w oknie `Sesyjka Cloud` wpisz Project URL i Publishable key. Alternatywnie można uruchomić program z:
+Produkcja 0.9.2 ma zapisane w aplikacji:
+
+```text
+SUPABASE_URL=https://rjevhlnscdodgoaztxao.supabase.co
+SUPABASE_KEY=sb_publishable_AfaZRdfEWMi9QSMOjXgoRA_6zA6W7Yn
+```
+
+Publishable key jest publicznym kluczem klienta. Nie umieszczaj w repozytorium `service_role`, secret key, hasła bazy ani Discord Client Secret.
+
+Zwykły użytkownik nie widzi konfiguracji Supabase. Po kliknięciu `Zaloguj przez Discord` aplikacja korzysta z produkcyjnego backendu. Dla developmentu można tymczasowo nadpisać go zmiennymi:
 
 ```bash
-export SESYJKA_SUPABASE_URL='https://<project-ref>.supabase.co'
+export SESYJKA_SUPABASE_URL='https://testowy-projekt.supabase.co'
 export SESYJKA_SUPABASE_KEY='sb_publishable_...'
 ./run.sh
 ```

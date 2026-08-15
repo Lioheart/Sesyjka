@@ -1,4 +1,4 @@
--- Sesyjka Cloud 0.9.1
+-- Sesyjka Cloud 0.9.2
 -- Uruchom ten plik jeden raz w Supabase SQL Editor.
 
 create table if not exists public.sesyjka_records (

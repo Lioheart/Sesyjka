@@ -196,6 +196,26 @@ class ApplicationSourceTests(unittest.TestCase):
         self.assertIn('OAUTH_CALLBACK_HOST = "127.0.0.1"', oauth)
         self.assertIn('OAUTH_CALLBACK_PORT = 8765', oauth)
 
+
+    def test_cloud_backend_is_bundled_and_not_configured_in_gui(self) -> None:
+        app = (self.root / "sesyjka" / "app.py").read_text(encoding="utf-8")
+        config = (self.root / "sesyjka" / "config.py").read_text(encoding="utf-8")
+        self.assertIn("DEFAULT_SUPABASE_URL", config)
+        self.assertIn("sb_publishable_", config)
+        self.assertNotIn('Gtk.Label(label="Project URL"', app)
+        self.assertNotIn('Gtk.Label(label="Publishable key"', app)
+        self.assertNotIn('Gtk.Button(label="Zapisz konfigurację")', app)
+        self.assertIn('Gtk.Button(label="Zaloguj przez Discord")', app)
+
+    def test_sessions_have_google_and_apple_calendar_actions(self) -> None:
+        sessions = (self.root / "sesyjka" / "pages" / "sessions.py").read_text(encoding="utf-8")
+        calendar = (self.root / "sesyjka" / "calendar_integration.py").read_text(encoding="utf-8")
+        self.assertIn('Gtk.MenuButton(label="Kalendarz")', sessions)
+        self.assertIn('Gtk.Button(label="Google Calendar")', sessions)
+        self.assertIn('Gtk.Button(label="Apple / iCloud Calendar")', sessions)
+        self.assertIn("calendar.google.com/calendar/render", calendar)
+        self.assertIn("www.icloud.com/calendar", calendar)
+
     def test_source_project_basics_are_exposed(self) -> None:
         app = (self.root / "sesyjka" / "app.py").read_text(encoding="utf-8")
         sessions = (self.root / "sesyjka" / "pages" / "sessions.py").read_text(

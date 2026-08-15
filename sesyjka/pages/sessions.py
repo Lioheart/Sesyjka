@@ -8,6 +8,7 @@ import gi
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gtk
 
+from ..calendar_integration import downloads_dir, open_google_calendar, open_icloud_calendar, safe_session_filename
 from ..dialogs import ModalWindow, info, make_entry
 from ..repository import Repository
 from ..widgets import Choice, ChoiceDropDown, FormGrid, TextDropDown
@@ -33,6 +34,29 @@ class SessionsPage(CrudPage):
             "sesję",
         )
 
+        self.calendar_button = Gtk.MenuButton(label="Kalendarz")
+        self.calendar_button.set_tooltip_text("Dodaj zaznaczoną sesję do kalendarza")
+        calendar_popover = Gtk.Popover()
+        calendar_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        calendar_box.set_margin_top(6)
+        calendar_box.set_margin_bottom(6)
+        calendar_box.set_margin_start(6)
+        calendar_box.set_margin_end(6)
+
+        google = Gtk.Button(label="Google Calendar")
+        google.add_css_class("flat")
+        google.connect("clicked", lambda _button: self.add_selected_to_google(calendar_popover))
+        calendar_box.append(google)
+
+        apple = Gtk.Button(label="Apple / iCloud Calendar")
+        apple.add_css_class("flat")
+        apple.connect("clicked", lambda _button: self.add_selected_to_apple(calendar_popover))
+        calendar_box.append(apple)
+
+        calendar_popover.set_child(calendar_box)
+        self.calendar_button.set_popover(calendar_popover)
+        self.toolbar.append(self.calendar_button)
+
     def load_records(self) -> list[dict[str, Any]]:
         return self.repository.sessions()
 
@@ -41,6 +65,51 @@ class SessionsPage(CrudPage):
 
     def describe_record(self, record: dict[str, Any]) -> str:
         return f"{record.get('data_sesji', '')}, {record.get('system_nazwa', '')}"
+
+    def _selected_session_for_calendar(self) -> dict[str, Any] | None:
+        record = self.table.selected_record()
+        if record is None:
+            info(self.parent_window, "Brak zaznaczenia", "Zaznacz sesję, którą chcesz dodać do kalendarza.")
+            return None
+        return record
+
+    def add_selected_to_google(self, popover: Gtk.Popover | None = None) -> None:
+        if popover is not None:
+            popover.popdown()
+        record = self._selected_session_for_calendar()
+        if record is None:
+            return
+        try:
+            if not open_google_calendar(record):
+                raise RuntimeError("Nie udało się otworzyć domyślnej przeglądarki.")
+        except Exception as exc:
+            info(self.parent_window, "Google Calendar", str(exc), error=True)
+
+    def add_selected_to_apple(self, popover: Gtk.Popover | None = None) -> None:
+        if popover is not None:
+            popover.popdown()
+        record = self._selected_session_for_calendar()
+        if record is None:
+            return
+        try:
+            destination = downloads_dir() / safe_session_filename(record)
+            output = self.repository.export_session_ics(record, destination)
+            if not open_icloud_calendar():
+                raise RuntimeError("Nie udało się otworzyć domyślnej przeglądarki.")
+        except Exception as exc:
+            info(self.parent_window, "Apple Calendar", str(exc), error=True)
+            return
+        info(
+            self.parent_window,
+            "Apple / iCloud Calendar",
+            (
+                "Otworzono iCloud Calendar. Apple nie udostępnia publicznego adresu URL, "
+                "który potrafi wstępnie wypełnić pojedyncze wydarzenie. Sesyjka zapisała więc "
+                f"gotowy plik iCalendar:\n\n{output}\n\n"
+                "Zaimportuj ten plik do kalendarza iCloud. Na macOS ten sam plik można "
+                "otworzyć bezpośrednio w aplikacji Kalendarz."
+            ),
+        )
 
     def open_editor(self, record: dict[str, Any] | None) -> None:
         systems = self.repository.game_systems()
