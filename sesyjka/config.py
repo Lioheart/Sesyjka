@@ -22,6 +22,17 @@ def data_dir() -> Path:
     return path
 
 
+def cache_dir() -> Path:
+    override = os.environ.get("SESYJKA_CACHE_DIR")
+    if override:
+        path = Path(override).expanduser()
+    else:
+        base = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache"))
+        path = base / APP_DIR_NAME
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
 def config_dir() -> Path:
     override = os.environ.get("SESYJKA_CONFIG_DIR")
     if override:

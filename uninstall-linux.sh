@@ -71,6 +71,8 @@ if [[ "${EUID}" -eq 0 && -n "${SUDO_USER:-}" && "${SUDO_USER}" != "root" ]]; the
 fi
 DATA_DIR="${SESYJKA_DATA_DIR:-${XDG_DATA_HOME:-$effective_home/.local/share}/sesyjka}"
 CONFIG_DIR="${SESYJKA_CONFIG_DIR:-${XDG_CONFIG_HOME:-$effective_home/.config}/sesyjka}"
+STATE_DIR="${SESYJKA_STATE_DIR:-${XDG_STATE_HOME:-$effective_home/.local/state}/sesyjka}"
+CACHE_DIR="${SESYJKA_CACHE_DIR:-${XDG_CACHE_HOME:-$effective_home/.cache}/sesyjka}"
 
 if $PURGE_DATA; then
   answer=""
@@ -83,7 +85,7 @@ if $PURGE_DATA; then
   fi
   case "$answer" in
     y|Y|yes|YES|tak|TAK)
-      rm -rf "$DATA_DIR" "$CONFIG_DIR"
+      rm -rf "$DATA_DIR" "$CONFIG_DIR" "$STATE_DIR" "$CACHE_DIR"
       echo "Usunięto instalację systemową, dane i ustawienia bieżącego użytkownika."
       ;;
     *)

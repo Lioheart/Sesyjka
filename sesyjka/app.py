@@ -546,6 +546,7 @@ class SesyjkaWindow(Adw.ApplicationWindow):
             "SYSTEMY RPG\n"
             "Dodawaj systemy gry oraz pozycje typu Podręcznik Główny, Suplement, Inne i Grupa. "
             "Pozycje można przypisywać do systemu oraz do rekordów typu Grupa. "
+            "W formularzu pozycji numer ISBN może pobrać okładkę, tytuł, rok wydania i dostępną informację o cenie online. "
             "Tabela obsługuje rozwijanie hierarchii, sortowanie, wyszukiwanie i filtry kolumnowe.\n\n"
             "SESJE RPG\n"
             "Każda sesja wymaga daty, istniejącego systemu i co najmniej jednego gracza. "
@@ -585,6 +586,10 @@ class SesyjkaWindow(Adw.ApplicationWindow):
     def show_history(self) -> None:
         dialog = ModalWindow(self, "Historia zmian", width=720, height=620)
         history_text = (
+            "0.8.7\n"
+            "Dodano dzielony formularz pozycji RPG z panelem ISBN po prawej stronie. Open Library dostarcza metadane i okładki, "
+            "a Google Books uzupełnia dane i może podać informacyjną cenę online. Puste pola nazwy i roku są uzupełniane automatycznie, "
+            "istniejące wartości nie są nadpisywane bez użycia przycisku. Okładki są buforowane w katalogu XDG cache, a sieć działa w tle.\n\n"
             "0.8.6\n"
             "Dodano typ pozycji Grupa. Tylko rekordy tego typu mogą być wybierane w polu Grupa, "
             "a lista jest ograniczona do grup z wybranego systemu RPG. Usunięto typy Przygoda i Dodatek z formularza, "

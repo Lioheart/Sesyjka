@@ -1,10 +1,18 @@
-# Sesyjka GTK4 0.8.6
+# Sesyjka GTK4 0.8.7
 
 A native Linux application built with Python, GTK4 and Libadwaita. It manages tabletop RPG systems, books, supplements, sessions, players, publishers, board games and card games. The four original SQLite databases remain compatible, while board and card games use a separate fifth database.
 
 Result repository: https://github.com/Lioheart/Sesyjka
 
 Original project and attribution: https://github.com/ZuraffPL/sesyjka
+
+## Changes in 0.8.7
+
+- the RPG item editor now uses an approximately 60/40 split layout with editable fields on the left and an ISBN preview on the right
+- Open Library supplies cover/title/year metadata, while Google Books can supplement metadata and expose an informational online price when available
+- existing ISBN records are looked up when the editor opens. Empty title/year fields are filled automatically, while non-empty values require explicit confirmation
+- cover downloads and API requests run outside the GTK main thread. Covers are cached under the XDG cache directory
+- no SQLite schema was changed
 
 ## Changes in 0.8.6
 

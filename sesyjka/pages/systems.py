@@ -3,13 +3,15 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Callable
 import re
+from threading import Thread
 from typing import Any
 
 import gi
 
 gi.require_version("Gtk", "4.0")
-from gi.repository import Gtk
+from gi.repository import GLib, Gtk
 
+from ..book_lookup import BookLookupResult, download_cover, lookup_book, normalize_isbn
 from ..dialogs import ModalWindow, confirm, info, make_entry
 from ..repository import Repository
 from ..validation import LANGUAGE_CHOICES, is_valid_isbn, normalize_language_choice
@@ -330,8 +332,8 @@ class SystemsPage(CrudPage):
         dialog = ModalWindow(
             self.parent_window,
             "Edytuj pozycję RPG" if record else "Dodaj pozycję RPG",
-            width=720,
-            height=820,
+            width=1160,
+            height=860,
         )
         form = FormGrid()
         name = make_entry(record.get("nazwa") if record else "", "Nazwa pozycji")
@@ -469,7 +471,107 @@ class SystemsPage(CrudPage):
         form.add_row("Waluta zakupu", currency)
         form.add_row("Cena sprzedaży", sale_price)
         form.add_row("Waluta sprzedaży", sale_currency)
-        dialog.add_scrolled_content(form)
+
+        form_scroller = Gtk.ScrolledWindow()
+        form_scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        form_scroller.set_vexpand(True)
+        form_scroller.set_hexpand(True)
+        form_scroller.set_child(form)
+
+        preview = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        preview.add_css_class("isbn-preview")
+        preview.set_margin_start(18)
+        preview.set_margin_end(6)
+        preview.set_margin_top(4)
+        preview.set_margin_bottom(4)
+        preview.set_size_request(360, -1)
+
+        preview_heading = Gtk.Label(label="Dane z ISBN", xalign=0.0)
+        preview_heading.add_css_class("title-3")
+        preview.append(preview_heading)
+
+        cover_stack = Gtk.Stack()
+        cover_stack.set_vexpand(True)
+        cover_stack.set_size_request(300, 390)
+        cover_picture = Gtk.Picture()
+        cover_picture.set_can_shrink(True)
+        cover_picture.set_content_fit(Gtk.ContentFit.CONTAIN)
+        cover_picture.set_halign(Gtk.Align.FILL)
+        cover_picture.set_valign(Gtk.Align.FILL)
+        cover_stack.add_named(cover_picture, "cover")
+
+        cover_placeholder = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        cover_placeholder.set_halign(Gtk.Align.CENTER)
+        cover_placeholder.set_valign(Gtk.Align.CENTER)
+        placeholder_icon = Gtk.Image.new_from_icon_name("image-x-generic-symbolic")
+        placeholder_icon.set_pixel_size(96)
+        placeholder_label = Gtk.Label(label="Brak okładki")
+        placeholder_label.add_css_class("dim-label")
+        cover_placeholder.append(placeholder_icon)
+        cover_placeholder.append(placeholder_label)
+        cover_stack.add_named(cover_placeholder, "placeholder")
+        cover_stack.set_visible_child_name("placeholder")
+        preview.append(cover_stack)
+
+        isbn_title = Gtk.Label(label="Wpisz ISBN i pobierz dane", wrap=True, xalign=0.5)
+        isbn_title.add_css_class("title-4")
+        isbn_title.set_justify(Gtk.Justification.CENTER)
+        isbn_title.set_selectable(True)
+        preview.append(isbn_title)
+
+        isbn_year = Gtk.Label(label="", xalign=0.5)
+        isbn_year.add_css_class("dim-label")
+        preview.append(isbn_year)
+
+        online_price = Gtk.Label(label="", wrap=True, xalign=0.0)
+        online_price.set_selectable(True)
+        preview.append(online_price)
+
+        lookup_source = Gtk.Label(label="", wrap=True, xalign=0.0)
+        lookup_source.add_css_class("dim-label")
+        preview.append(lookup_source)
+
+        lookup_status = Gtk.Label(label="", wrap=True, xalign=0.0)
+        lookup_status.add_css_class("dim-label")
+        preview.append(lookup_status)
+
+        lookup_spinner = Gtk.Spinner()
+        lookup_spinner.set_halign(Gtk.Align.CENTER)
+        preview.append(lookup_spinner)
+
+        lookup_button = Gtk.Button(label="Pobierz z ISBN")
+        preview.append(lookup_button)
+
+        apply_metadata_button = Gtk.Button(label="Użyj tytułu i roku")
+        apply_metadata_button.set_visible(False)
+        preview.append(apply_metadata_button)
+
+        apply_price_button = Gtk.Button(label="Użyj ceny online")
+        apply_price_button.set_visible(False)
+        preview.append(apply_price_button)
+
+        preview_note = Gtk.Label(
+            label=(
+                "Metadane i okładka są pobierane jednorazowo na żądanie. "
+                "Cena online jest informacyjna i może dotyczyć wydania cyfrowego."
+            ),
+            wrap=True,
+            xalign=0.0,
+        )
+        preview_note.add_css_class("caption")
+        preview_note.add_css_class("dim-label")
+        preview.append(preview_note)
+
+        split = Gtk.Paned.new(Gtk.Orientation.HORIZONTAL)
+        split.set_wide_handle(True)
+        split.set_vexpand(True)
+        split.set_hexpand(True)
+        split.set_start_child(form_scroller)
+        split.set_end_child(preview)
+        split.set_position(690)
+        dialog.root_box.append(split)
+
+        lookup_state: dict[str, Any] = {"generation": 0, "result": None}
 
         def parse_price(entry: Gtk.Entry) -> float:
             text = entry.get_text().strip().replace(",", ".")
@@ -479,6 +581,162 @@ class SystemsPage(CrudPage):
                 return max(float(text), 0.0)
             except ValueError:
                 return 0.0
+
+        def local_prices_missing() -> bool:
+            return all(
+                parse_price(entry) <= 0.0
+                for entry in (price_physical, price_pdf, price_vtt)
+            )
+
+        def apply_lookup_metadata(_button: Gtk.Button | None = None) -> None:
+            result = lookup_state.get("result")
+            if not isinstance(result, BookLookupResult):
+                return
+            if result.title:
+                name.set_text(result.title)
+            if result.published_year:
+                year.set_text(result.published_year)
+
+        def apply_lookup_price(_button: Gtk.Button | None = None) -> None:
+            result = lookup_state.get("result")
+            if not isinstance(result, BookLookupResult) or not result.has_price():
+                return
+            targets: list[tuple[str, Gtk.Entry]] = []
+            if physical.get_active():
+                targets.append(("fizyczną", price_physical))
+            if pdf.get_active():
+                targets.append(("PDF", price_pdf))
+            if vtt_enabled.get_active():
+                targets.append(("VTT", price_vtt))
+
+            target: Gtk.Entry | None = None
+            if result.price_kind == "e-book" and pdf.get_active():
+                target = price_pdf
+            elif len(targets) == 1:
+                target = targets[0][1]
+            if target is None:
+                info(
+                    dialog,
+                    "Wybierz format ceny",
+                    "Cena internetowa jest tylko wskazówką. Zaznacz dokładnie jeden "
+                    "format albo zaznacz PDF dla ceny e-booka, a następnie użyj ceny ponownie.",
+                )
+                return
+
+            target.set_text(f"{float(result.price_amount):.2f}")
+            if result.price_currency:
+                currency.set_text(result.price_currency)
+            update_total()
+            apply_price_button.set_visible(False)
+
+        def finish_isbn_lookup(
+            generation: int,
+            result: BookLookupResult,
+            cover_path: str,
+        ) -> bool:
+            if generation != int(lookup_state.get("generation", 0)):
+                return False
+            if not dialog.get_visible():
+                return False
+            lookup_spinner.stop()
+            lookup_button.set_sensitive(True)
+
+            lookup_state["result"] = result
+            if cover_path:
+                cover_picture.set_filename(cover_path)
+                cover_stack.set_visible_child_name("cover")
+            else:
+                cover_stack.set_visible_child_name("placeholder")
+
+            isbn_title.set_text(result.title or "Nie znaleziono tytułu")
+            isbn_year.set_text(
+                f"Rok wydania: {result.published_year}"
+                if result.published_year
+                else "Rok wydania: brak danych"
+            )
+            if result.has_price():
+                kind = f", {result.price_kind}" if result.price_kind else ""
+                online_price.set_text(
+                    f"Cena online: {float(result.price_amount):.2f} "
+                    f"{result.price_currency}{kind}"
+                )
+            else:
+                online_price.set_text("Cena online: brak danych")
+
+            sources = ", ".join(result.metadata_sources)
+            if result.price_source and result.price_source not in result.metadata_sources:
+                sources = ", ".join(filter(None, (sources, result.price_source)))
+            lookup_source.set_text(f"Źródło: {sources}" if sources else "")
+
+            if result.title and not name.get_text().strip():
+                name.set_text(result.title)
+            if result.published_year and not year.get_text().strip():
+                year.set_text(result.published_year)
+
+            can_apply_metadata = bool(
+                (result.title and result.title != name.get_text().strip())
+                or (result.published_year and result.published_year != year.get_text().strip())
+            )
+            apply_metadata_button.set_visible(can_apply_metadata)
+            apply_price_button.set_visible(result.has_price() and local_prices_missing())
+            if result.has_metadata() or result.has_price():
+                lookup_status.set_text("Pobieranie zakończone.")
+            else:
+                lookup_status.set_text("Nie znaleziono danych dla podanego ISBN.")
+            return False
+
+        def start_isbn_lookup(_button: Gtk.Button | None = None) -> None:
+            isbn_value = normalize_isbn(isbn.get_text())
+            if not isbn_value:
+                lookup_status.set_text("Wpisz numer ISBN.")
+                return
+
+            lookup_state["generation"] = int(lookup_state.get("generation", 0)) + 1
+            generation = int(lookup_state["generation"])
+            lookup_button.set_sensitive(False)
+            lookup_spinner.start()
+            lookup_status.set_text("Pobieranie danych z internetu…")
+            apply_metadata_button.set_visible(False)
+            apply_price_button.set_visible(False)
+
+            def worker() -> None:
+                result = lookup_book(isbn_value, timeout=6.0)
+                cover = download_cover(result, timeout=6.0)
+                GLib.idle_add(
+                    finish_isbn_lookup,
+                    generation,
+                    result,
+                    str(cover) if cover else "",
+                )
+
+            Thread(
+                target=worker,
+                name=f"sesyjka-isbn-{isbn_value}",
+                daemon=True,
+            ).start()
+
+        def on_isbn_changed(_entry: Gtk.Entry) -> None:
+            result = lookup_state.get("result")
+            if isinstance(result, BookLookupResult) and result.isbn == normalize_isbn(isbn.get_text()):
+                return
+            lookup_state["result"] = None
+            lookup_state["generation"] = int(lookup_state.get("generation", 0)) + 1
+            lookup_spinner.stop()
+            lookup_button.set_sensitive(True)
+            cover_stack.set_visible_child_name("placeholder")
+            isbn_title.set_text("Wpisz ISBN i pobierz dane")
+            isbn_year.set_text("")
+            online_price.set_text("")
+            lookup_source.set_text("")
+            lookup_status.set_text("")
+            apply_metadata_button.set_visible(False)
+            apply_price_button.set_visible(False)
+
+        lookup_button.connect("clicked", start_isbn_lookup)
+        apply_metadata_button.connect("clicked", apply_lookup_metadata)
+        apply_price_button.connect("clicked", apply_lookup_price)
+        isbn.connect("changed", on_isbn_changed)
+        isbn.connect("activate", start_isbn_lookup)
 
         def update_total(*_args: object) -> None:
             total = 0.0
@@ -622,3 +880,11 @@ class SystemsPage(CrudPage):
 
         dialog.add_buttons(save)
         dialog.present()
+
+        if normalize_isbn(isbn.get_text()):
+            def auto_lookup() -> bool:
+                if dialog.get_visible():
+                    start_isbn_lookup()
+                return False
+
+            GLib.idle_add(auto_lookup)

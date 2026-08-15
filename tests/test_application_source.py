@@ -337,6 +337,20 @@ class ApplicationSourceTests(unittest.TestCase):
         self.assertIn('wyłącznie pozycję typu Grupa', repository)
         self.assertIn('normalized["system_glowny_id"] = None', repository)
 
+    def test_rpg_editor_has_isbn_preview_and_background_lookup(self) -> None:
+        source = (self.root / "sesyjka" / "pages" / "systems.py").read_text(encoding="utf-8")
+        lookup = (self.root / "sesyjka" / "book_lookup.py").read_text(encoding="utf-8")
+        self.assertIn("Gtk.Paned.new(Gtk.Orientation.HORIZONTAL)", source)
+        self.assertIn('label="Dane z ISBN"', source)
+        self.assertIn('label="Pobierz z ISBN"', source)
+        self.assertIn("Gtk.Picture", source)
+        self.assertIn("Thread(", source)
+        self.assertIn("Open Library", lookup)
+        self.assertIn("Google Books", lookup)
+        self.assertIn("price_amount", lookup)
+        self.assertIn("XDG_CACHE_HOME", (self.root / "sesyjka" / "config.py").read_text(encoding="utf-8"))
+
+
 
 if __name__ == "__main__":
     unittest.main()

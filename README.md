@@ -1,4 +1,4 @@
-# Sesyjka GTK4 0.8.6
+# Sesyjka GTK4 0.8.7
 
 Natywna aplikacja dla Linuksa zbudowana w Pythonie, GTK4 i Libadwaita. Program kataloguje systemy RPG, podręczniki, suplementy, sesje, graczy, wydawców oraz gry planszowe i karciane.
 
@@ -19,6 +19,21 @@ Zakładka **Gry planszowe** korzysta z osobnej bazy `planszowe.db`. Przechowuje 
 Statystyki obejmują systemy RPG, sesje, graczy, wydawców, formaty fizyczne i PDF, łączną liczbę planszówek i karcianek oraz sumę cen zakupu wszystkich pozycji RPG i gier stołowych, podaną osobno dla każdej waluty. Wykres gier stołowych pokazuje osobno planszówki i karcianki. Dwie tabele zestawień są rozdzielone odstępem i pionowym separatorem.
 
 Transfer danych obejmuje eksport ZIP, eksport do folderu, eksport XLSX, eksport sesji do ICS i CSV, import z walidacją i kopią zapasową oraz tryb gościa tylko do odczytu.
+
+Formularz pozycji RPG ma dzielony układ. Około 60% szerokości zajmują pola edycji, a prawa część pokazuje dane znalezione dla ISBN: okładkę, tytuł, rok wydania i ewentualną informacyjną cenę online. Metadane są pobierane na żądanie oraz automatycznie przy otwarciu rekordu z zapisanym ISBN. Puste pola nazwy i roku są uzupełniane automatycznie. Istniejące wartości nie są nadpisywane bez użycia przycisku `Użyj tytułu i roku`. Jeśli lokalna cena nie jest podana, dostępna cena z Google Books może zostać pokazana i ręcznie zastosowana do wybranego formatu. Cena Google Books może dotyczyć e-booka i jest jawnie oznaczana jako informacyjna.
+
+Wyszukiwanie ISBN korzysta z Open Library oraz Google Books. Numer ISBN jest wysyłany do tych usług wyłącznie podczas pobierania danych. Okładki są zapisywane w `${XDG_CACHE_HOME:-~/.cache}/sesyjka/covers/`. Opcjonalnie można ustawić `SESYJKA_GOOGLE_BOOKS_API_KEY`, aby identyfikować żądania Google Books własnym kluczem API.
+
+## Zmiany w 0.8.7
+
+- formularz dodawania i edycji pozycji RPG ma układ dzielony około 60/40, z polami po lewej i podglądem ISBN po prawej
+- dla ISBN pobierane są okładka, tytuł i rok wydania. Open Library jest podstawowym źródłem metadanych i okładek, a Google Books uzupełnia brakujące dane
+- rekord z istniejącym ISBN jest sprawdzany automatycznie po otwarciu, a nowe ISBN można pobrać przyciskiem `Pobierz z ISBN` lub klawiszem Enter w polu ISBN
+- puste pola nazwy i roku są uzupełniane automatycznie, natomiast istniejące dane wymagają jawnego użycia przycisku `Użyj tytułu i roku`
+- gdy lokalna cena nie została podana i Google Books zwróci cenę, panel pokazuje ją jako informacyjną oraz udostępnia przycisk `Użyj ceny online`
+- cena z Google Books jest opisana jako cena e-booka, gdy API oznacza rekord jako e-book. Program nie udaje, że jest to cena rynkowa wydania fizycznego
+- pobieranie odbywa się w wątku roboczym, aby nie blokować GTK. Okładki są buforowane w katalogu XDG cache
+- nie zmieniono schematu żadnej bazy SQLite
 
 ## Zmiany w 0.8.6
 
@@ -70,6 +85,7 @@ Domyślne lokalizacje:
 ${XDG_DATA_HOME:-~/.local/share}/sesyjka/
 ${XDG_CONFIG_HOME:-~/.config}/sesyjka/
 ${XDG_STATE_HOME:-~/.local/state}/sesyjka/
+${XDG_CACHE_HOME:-~/.cache}/sesyjka/
 ```
 
 Pliki baz:
@@ -84,7 +100,7 @@ planszowe.db
 
 Pierwsze cztery pliki zachowują schematy zgodne z projektem `ZuraffPL/sesyjka`. Nowa funkcja planszówek nie dodaje tabel ani kolumn do tych baz. Jest przechowywana wyłącznie w `planszowe.db`.
 
-Import i tryb gościa nadal akceptują zestaw zawierający tylko cztery oryginalne bazy. W takim przypadku zakładka gier planszowych pozostaje pusta. Eksport tworzony przez wersję 0.8.6 zawiera pięć baz.
+Import i tryb gościa nadal akceptują zestaw zawierający tylko cztery oryginalne bazy. W takim przypadku zakładka gier planszowych pozostaje pusta. Eksport tworzony przez wersję 0.8.7 zawiera pięć baz.
 
 Log diagnostyczny:
 
