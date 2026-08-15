@@ -345,8 +345,12 @@ class ApplicationSourceTests(unittest.TestCase):
         self.assertIn('label="Pobierz z ISBN"', source)
         self.assertIn("Gtk.Picture", source)
         self.assertIn("Thread(", source)
+        self.assertIn("Biblioteka Narodowa", lookup)
         self.assertIn("Open Library", lookup)
         self.assertIn("Google Books", lookup)
+        self.assertIn("isbn_variants", lookup)
+        self.assertIn("publisher", lookup)
+        self.assertIn('label="Użyj danych z ISBN"', source)
         self.assertIn("price_amount", lookup)
         self.assertIn("XDG_CACHE_HOME", (self.root / "sesyjka" / "config.py").read_text(encoding="utf-8"))
 

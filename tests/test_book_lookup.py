@@ -14,6 +14,85 @@ class BookLookupTests(unittest.TestCase):
         self.assertEqual(book_lookup.normalize_isbn("83-86187-76-x"), "838618776X")
         self.assertEqual(book_lookup.normalize_isbn("978-83-7418-231-7"), "9788374182317")
 
+
+    def test_isbn_variants_convert_between_10_and_13(self) -> None:
+        self.assertEqual(
+            book_lookup.isbn_variants("978-83-960121-1-1"),
+            ("9788396012111", "8396012113"),
+        )
+        self.assertEqual(
+            book_lookup.isbn_variants("83-960121-1-3"),
+            ("8396012113", "9788396012111"),
+        )
+
+    def test_national_library_extracts_polish_title_year_and_publisher(self) -> None:
+        payload = {
+            "bibs": [
+                {
+                    "isbnIssn": "978-83-960121-1-1",
+                    "title": "Podręcznik gracza",
+                    "publisher": "Stowarzyszenie Topory",
+                    "publicationYear": "2024",
+                }
+            ]
+        }
+        with patch.object(book_lookup, "_json_get", return_value=payload):
+            result = book_lookup._bn_result("9788396012111", timeout=1)
+        assert result is not None
+        self.assertEqual(result.title, "Podręcznik gracza")
+        self.assertEqual(result.published_year, "2024")
+        self.assertEqual(result.publisher, "Stowarzyszenie Topory")
+        self.assertEqual(result.metadata_sources, ("Biblioteka Narodowa",))
+
+    def test_google_books_falls_back_from_isbn_to_title_and_publisher(self) -> None:
+        no_match = {"totalItems": 0}
+        by_title = {
+            "items": [
+                {
+                    "id": "1fq80AEACAAJ",
+                    "volumeInfo": {
+                        "title": "Podręcznik gracza",
+                        "publisher": "Stowarzyszenie Topory",
+                        "publishedDate": "2024",
+                    },
+                    "saleInfo": {},
+                }
+            ]
+        }
+
+        def fake_query(query: str, *, timeout: float):
+            if "intitle:" in query:
+                return by_title
+            return no_match
+
+        with patch.object(book_lookup, "_google_query_data", side_effect=fake_query):
+            result = book_lookup._google_books_result(
+                "978-83-960121-1-1",
+                timeout=1,
+                title_hint="Podręcznik gracza",
+                publisher_hint="Stowarzyszenie Topory",
+            )
+        assert result is not None
+        self.assertEqual(result.title, "Podręcznik gracza")
+        self.assertEqual(result.publisher, "Stowarzyszenie Topory")
+        self.assertIn("books/content?id=1fq80AEACAAJ", result.cover_url)
+
+    def test_download_cover_tries_later_candidates_when_first_source_has_no_cover(self) -> None:
+        result = book_lookup.BookLookupResult(
+            isbn="9788396012111",
+            cover_url="https://covers.openlibrary.org/b/isbn/9788396012111-L.jpg?default=false",
+            cover_candidates=(
+                "https://books.google.com/books/content?id=1fq80AEACAAJ&img=1&zoom=3",
+            ),
+        )
+        jpeg = b"\xff\xd8\xff" + b"x" * 100
+        with tempfile.TemporaryDirectory() as directory, patch.dict(
+            os.environ, {"SESYJKA_CACHE_DIR": directory}
+        ), patch.object(book_lookup, "_download_image", side_effect=[None, jpeg]) as mocked:
+            path = book_lookup.download_cover(result, timeout=1)
+        self.assertIsNotNone(path)
+        self.assertEqual(mocked.call_count, 2)
+
     def test_open_library_uses_matching_edition_title_year_and_cover(self) -> None:
         payload = {
             "docs": [
@@ -86,9 +165,9 @@ class BookLookupTests(unittest.TestCase):
             price_source="Google Books",
             metadata_sources=("Google Books",),
         )
-        with patch.object(book_lookup, "_open_library_result", return_value=ol), patch.object(
-            book_lookup, "_google_books_result", return_value=google
-        ):
+        with patch.object(book_lookup, "_bn_result", return_value=None), patch.object(
+            book_lookup, "_open_library_result", return_value=ol
+        ), patch.object(book_lookup, "_google_books_result", return_value=google):
             result = book_lookup.lookup_book("123", timeout=1)
         self.assertEqual(result.title, "OL title")
         self.assertEqual(result.published_year, "2001")

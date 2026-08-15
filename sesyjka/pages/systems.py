@@ -523,6 +523,12 @@ class SystemsPage(CrudPage):
         isbn_year.add_css_class("dim-label")
         preview.append(isbn_year)
 
+        isbn_publisher = Gtk.Label(label="", wrap=True, xalign=0.5)
+        isbn_publisher.add_css_class("dim-label")
+        isbn_publisher.set_justify(Gtk.Justification.CENTER)
+        isbn_publisher.set_selectable(True)
+        preview.append(isbn_publisher)
+
         online_price = Gtk.Label(label="", wrap=True, xalign=0.0)
         online_price.set_selectable(True)
         preview.append(online_price)
@@ -542,7 +548,7 @@ class SystemsPage(CrudPage):
         lookup_button = Gtk.Button(label="Pobierz z ISBN")
         preview.append(lookup_button)
 
-        apply_metadata_button = Gtk.Button(label="Użyj tytułu i roku")
+        apply_metadata_button = Gtk.Button(label="Użyj danych z ISBN")
         apply_metadata_button.set_visible(False)
         preview.append(apply_metadata_button)
 
@@ -588,6 +594,15 @@ class SystemsPage(CrudPage):
                 for entry in (price_physical, price_pdf, price_vtt)
             )
 
+        def matching_publisher_id(label: str) -> int | None:
+            wanted = str(label or "").strip().casefold()
+            if not wanted:
+                return None
+            for row in self.repository.publishers():
+                if str(row.get("nazwa") or "").strip().casefold() == wanted:
+                    return int(row["id"])
+            return None
+
         def apply_lookup_metadata(_button: Gtk.Button | None = None) -> None:
             result = lookup_state.get("result")
             if not isinstance(result, BookLookupResult):
@@ -596,6 +611,17 @@ class SystemsPage(CrudPage):
                 name.set_text(result.title)
             if result.published_year:
                 year.set_text(result.published_year)
+            if result.publisher:
+                publisher_id = matching_publisher_id(result.publisher)
+                if publisher_id is not None:
+                    publisher.set_choices(self._publisher_choices(), publisher_id)
+                else:
+                    info(
+                        dialog,
+                        "Wydawca nie istnieje w bazie",
+                        f"Znaleziono wydawcę: {result.publisher}. "
+                        "Dodaj go przyciskiem ‘Dodaj wydawcę’, jeżeli chcesz przypisać go do pozycji.",
+                    )
 
         def apply_lookup_price(_button: Gtk.Button | None = None) -> None:
             result = lookup_state.get("result")
@@ -654,6 +680,14 @@ class SystemsPage(CrudPage):
                 if result.published_year
                 else "Rok wydania: brak danych"
             )
+            if result.publisher:
+                publisher_id = matching_publisher_id(result.publisher)
+                suffix = "" if publisher_id is not None else " (brak w bazie wydawców)"
+                isbn_publisher.set_text(f"Wydawca: {result.publisher}{suffix}")
+                if publisher.identifier() is None and publisher_id is not None:
+                    publisher.set_choices(self._publisher_choices(), publisher_id)
+            else:
+                isbn_publisher.set_text("Wydawca: brak danych")
             if result.has_price():
                 kind = f", {result.price_kind}" if result.price_kind else ""
                 online_price.set_text(
@@ -673,9 +707,12 @@ class SystemsPage(CrudPage):
             if result.published_year and not year.get_text().strip():
                 year.set_text(result.published_year)
 
+            matched_publisher = matching_publisher_id(result.publisher) if result.publisher else None
             can_apply_metadata = bool(
                 (result.title and result.title != name.get_text().strip())
                 or (result.published_year and result.published_year != year.get_text().strip())
+                or (matched_publisher is not None and matched_publisher != publisher.identifier())
+                or (result.publisher and matched_publisher is None)
             )
             apply_metadata_button.set_visible(can_apply_metadata)
             apply_price_button.set_visible(result.has_price() and local_prices_missing())
@@ -726,6 +763,7 @@ class SystemsPage(CrudPage):
             cover_stack.set_visible_child_name("placeholder")
             isbn_title.set_text("Wpisz ISBN i pobierz dane")
             isbn_year.set_text("")
+            isbn_publisher.set_text("")
             online_price.set_text("")
             lookup_source.set_text("")
             lookup_status.set_text("")

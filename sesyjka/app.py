@@ -586,7 +586,7 @@ class SesyjkaWindow(Adw.ApplicationWindow):
     def show_history(self) -> None:
         dialog = ModalWindow(self, "Historia zmian", width=720, height=620)
         history_text = (
-            "0.8.7\n"
+            "0.8.8\n"
             "Dodano dzielony formularz pozycji RPG z panelem ISBN po prawej stronie. Open Library dostarcza metadane i okładki, "
             "a Google Books uzupełnia dane i może podać informacyjną cenę online. Puste pola nazwy i roku są uzupełniane automatycznie, "
             "istniejące wartości nie są nadpisywane bez użycia przycisku. Okładki są buforowane w katalogu XDG cache, a sieć działa w tle.\n\n"
