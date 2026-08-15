@@ -36,6 +36,9 @@ install -m 0644 LICENSE %{buildroot}%{_datadir}/doc/%{name}/LICENSE
 install -m 0644 NOTICE.md %{buildroot}%{_datadir}/doc/%{name}/NOTICE.md
 install -m 0644 README.md %{buildroot}%{_datadir}/doc/%{name}/README.md
 install -m 0644 README.en.md %{buildroot}%{_datadir}/doc/%{name}/README.en.md
+install -d %{buildroot}%{_datadir}/doc/%{name}/supabase
+install -m 0644 supabase/schema.sql %{buildroot}%{_datadir}/doc/%{name}/supabase/schema.sql
+install -m 0644 supabase/README.md %{buildroot}%{_datadir}/doc/%{name}/supabase/README.md
 
 cat > %{buildroot}%{_bindir}/sesyjka <<'WRAPPER'
 #!/usr/bin/env sh
@@ -60,6 +63,8 @@ python3 -m unittest discover -s tests -v
 %doc %{_datadir}/doc/%{name}/NOTICE.md
 %doc %{_datadir}/doc/%{name}/README.md
 %doc %{_datadir}/doc/%{name}/README.en.md
+%doc %{_datadir}/doc/%{name}/supabase/schema.sql
+%doc %{_datadir}/doc/%{name}/supabase/README.md
 %{_bindir}/sesyjka
 %{_datadir}/sesyjka/
 %{_datadir}/applications/io.github.zuraffpl.Sesyjka.desktop

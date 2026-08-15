@@ -1108,7 +1108,7 @@ class SesyjkaWindow(Adw.ApplicationWindow):
     def show_history(self) -> None:
         dialog = ModalWindow(self, "Historia zmian", width=720, height=620)
         history_text = (
-            "0.9.2\n"
+            "0.9.3\n"
             "Backend Sesyjka Cloud jest skonfigurowany bezpośrednio w aplikacji, a GUI nie wymaga Project URL ani klucza Supabase. Dodano szybkie dodawanie zaznaczonej sesji do Google Calendar w przeglądarce oraz eksport pojedynczej sesji do ICS z otwarciem iCloud Calendar dla użytkowników Apple.\n\n"
             "0.9.1\n"
             "Logowanie Sesyjka Cloud odbywa się przez konto Discord w bezpiecznym przepływie OAuth PKCE. Po poprawnej autoryzacji synchronizacja uruchamia się automatycznie. Dodano lokalny callback tylko na 127.0.0.1 oraz czytelniejszy komunikat dla niewdrożonego backendu Supabase.\n\n"

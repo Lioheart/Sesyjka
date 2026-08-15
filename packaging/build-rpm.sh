@@ -21,14 +21,7 @@ fi
 mkdir -p "$TOPDIR"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
 SOURCE_ROOT="$STAGE/sesyjka-$VERSION"
 mkdir -p "$SOURCE_ROOT"
-for path in sesyjka data tests screenshots packaging .github; do
-  cp -a "$PROJECT_ROOT/$path" "$SOURCE_ROOT/"
-done
-for file in   LICENSE NOTICE.md README.md README.en.md FUNCTIONALITY_AUDIT.md MIGRATION_AUDIT.md   pyproject.toml requirements.txt run.sh install-linux.sh uninstall-linux.sh main.py; do
-  cp -a "$PROJECT_ROOT/$file" "$SOURCE_ROOT/"
-done
-find "$SOURCE_ROOT" -type d -name __pycache__ -prune -exec rm -rf {} +
-find "$SOURCE_ROOT" -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
+stage_release_source "$SOURCE_ROOT"
 (
   cd "$STAGE"
   tar --sort=name --owner=0 --group=0 --numeric-owner -czf \

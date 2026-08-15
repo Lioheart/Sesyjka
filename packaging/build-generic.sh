@@ -13,18 +13,7 @@ STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 PACKAGE_ROOT="$STAGE/sesyjka-$VERSION"
 mkdir -p "$PACKAGE_ROOT"
-
-for path in sesyjka data screenshots tests packaging .github supabase; do
-  cp -a "$PROJECT_ROOT/$path" "$PACKAGE_ROOT/"
-done
-for file in \
-  LICENSE NOTICE.md README.md README.en.md FUNCTIONALITY_AUDIT.md MIGRATION_AUDIT.md \
-  main.py pyproject.toml requirements.txt run.sh install-linux.sh uninstall-linux.sh; do
-  [[ -e "$PROJECT_ROOT/$file" ]] && cp -a "$PROJECT_ROOT/$file" "$PACKAGE_ROOT/"
-done
-chmod 0755 "$PACKAGE_ROOT/run.sh" "$PACKAGE_ROOT/install-linux.sh" "$PACKAGE_ROOT/uninstall-linux.sh"
-find "$PACKAGE_ROOT" -type d -name __pycache__ -prune -exec rm -rf {} +
-find "$PACKAGE_ROOT" -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
+stage_release_source "$PACKAGE_ROOT"
 
 TAR_NAME="sesyjka-$VERSION-linux-installer.tar.gz"
 ZIP_NAME="sesyjka-$VERSION-linux-installer.zip"

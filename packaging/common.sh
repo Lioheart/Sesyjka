@@ -18,6 +18,26 @@ print(match.group(1))
 PY
 }
 
+stage_release_source() {
+  local destination="$1"
+  rm -rf "$destination"
+  mkdir -p "$destination"
+
+  local path file
+  for path in sesyjka data screenshots tests packaging .github supabase; do
+    cp -a "$PROJECT_ROOT/$path" "$destination/"
+  done
+  for file in \
+    LICENSE NOTICE.md README.md README.en.md FUNCTIONALITY_AUDIT.md MIGRATION_AUDIT.md \
+    main.py pyproject.toml requirements.txt run.sh install-linux.sh uninstall-linux.sh; do
+    [[ -e "$PROJECT_ROOT/$file" ]] && cp -a "$PROJECT_ROOT/$file" "$destination/"
+  done
+
+  chmod 0755 "$destination/run.sh" "$destination/install-linux.sh" "$destination/uninstall-linux.sh"
+  find "$destination" -type d -name __pycache__ -prune -exec rm -rf {} +
+  find "$destination" -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
+}
+
 validate_version() {
   local requested="${1:-$(project_version)}"
   local project

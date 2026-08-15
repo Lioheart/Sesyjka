@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import re
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -43,7 +45,7 @@ class ReleasePackagingTests(unittest.TestCase):
         self.assertIsNotNone(project_match)
         self.assertIsNotNone(app_match)
         self.assertEqual(project_match.group(1), app_match.group(1))
-        self.assertEqual(project_match.group(1), "0.9.2")
+        self.assertEqual(project_match.group(1), "0.9.3")
 
     def test_github_actions_use_existing_major_versions(self) -> None:
         ci = (self.root / ".github/workflows/ci.yml").read_text(encoding="utf-8")
@@ -65,10 +67,39 @@ class ReleasePackagingTests(unittest.TestCase):
         self.assertIn("pkexec", updater)
 
 
+    def test_release_source_staging_physically_contains_supabase_files(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            destination = Path(temp_dir) / "sesyjka-source"
+            command = (
+                'source packaging/common.sh; '
+                f'stage_release_source "{destination}"'
+            )
+            subprocess.run(
+                ["bash", "-lc", command],
+                cwd=self.root,
+                check=True,
+            )
+            self.assertTrue((destination / "supabase/schema.sql").is_file())
+            self.assertTrue((destination / "supabase/README.md").is_file())
+            self.assertTrue((destination / "tests/test_application_source.py").is_file())
+
+    def test_rpm_source_includes_supabase_cloud_setup(self) -> None:
+        common = (self.root / "packaging/common.sh").read_text(encoding="utf-8")
+        rpm_builder = (self.root / "packaging/build-rpm.sh").read_text(encoding="utf-8")
+        generic_builder = (self.root / "packaging/build-generic.sh").read_text(encoding="utf-8")
+        rpm_spec = (self.root / "packaging/rpm/sesyjka.spec.in").read_text(encoding="utf-8")
+        self.assertIn("screenshots tests packaging .github supabase", common)
+        self.assertIn('stage_release_source "$SOURCE_ROOT"', rpm_builder)
+        self.assertIn('stage_release_source "$PACKAGE_ROOT"', generic_builder)
+        self.assertIn("supabase/schema.sql", rpm_spec)
+        self.assertIn("supabase/README.md", rpm_spec)
+
     def test_cloud_setup_files_are_in_release_installers_and_wheel_resources(self) -> None:
         generic = (self.root / "packaging/build-generic.sh").read_text(encoding="utf-8")
+        common = (self.root / "packaging/common.sh").read_text(encoding="utf-8")
         pyproject = (self.root / "pyproject.toml").read_text(encoding="utf-8")
-        self.assertIn(".github supabase", generic)
+        self.assertIn('stage_release_source "$PACKAGE_ROOT"', generic)
+        self.assertIn(".github supabase", common)
         self.assertTrue((self.root / "supabase/schema.sql").is_file())
         self.assertTrue((self.root / "sesyjka/resources/supabase/schema.sql").is_file())
         self.assertEqual(
@@ -82,7 +113,7 @@ class ReleasePackagingTests(unittest.TestCase):
             self.root / "data/io.github.zuraffpl.Sesyjka.metainfo.xml"
         ).read_text(encoding="utf-8")
         self.assertIn("https://github.com/Lioheart/Sesyjka", metainfo)
-        self.assertIn('<release version="0.9.2"', metainfo)
+        self.assertIn('<release version="0.9.3"', metainfo)
         self.assertNotIn("github.com/ZuraffPL/sesyjka", metainfo)
 
 
