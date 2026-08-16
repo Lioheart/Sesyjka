@@ -48,7 +48,7 @@ class CrudPage(Gtk.Box):
 
         self.add_button = Gtk.Button(label="Dodaj")
         self.add_button.add_css_class("suggested-action")
-        self.add_button.connect("clicked", lambda _button: self.open_editor(None))
+        self.add_button.connect("clicked", lambda _button: self._open_editor_preserving_view(None))
         toolbar.append(self.add_button)
 
         self.edit_button = Gtk.Button(label="Edytuj")
@@ -73,8 +73,8 @@ class CrudPage(Gtk.Box):
             link_columns=link_columns,
             boolean_icon_columns=boolean_icon_columns,
         )
-        self.table.connect_activate(self.open_editor)
-        self.table.set_context_actions(self.open_editor, self.request_delete)
+        self.table.connect_activate(self._open_editor_preserving_view)
+        self.table.set_context_actions(self._open_editor_preserving_view, self.request_delete)
         self.table.set_view_changed_callback(self.update_status)
         self.append(self.table)
         self.status = Gtk.Label(xalign=0.0)
@@ -126,10 +126,14 @@ class CrudPage(Gtk.Box):
             return None
         return record
 
+    def _open_editor_preserving_view(self, record: dict[str, Any] | None) -> None:
+        self.table.pin_refresh_view_state()
+        self.open_editor(record)
+
     def edit_selected(self) -> None:
         record = self._validated_selected_record()
         if record is not None:
-            self.open_editor(record)
+            self._open_editor_preserving_view(record)
 
     def delete_selected(self) -> None:
         record = self._validated_selected_record()
@@ -139,6 +143,7 @@ class CrudPage(Gtk.Box):
     def request_delete(self, record: dict[str, Any]) -> None:
         if record.get("_is_group") and not record.get("_is_entity"):
             return
+        self.table.pin_refresh_view_state()
         label = self.describe_record(record)
         confirm(
             self.parent_window,

@@ -452,6 +452,16 @@ class DataTable(Gtk.Box):
         self.scroller.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
         self.scroller.set_child(self.view)
         self.append(self.scroller)
+        self._pinned_refresh_view_state: tuple[tuple[str, str] | None, float, float] | None = None
+
+    def pin_refresh_view_state(self) -> None:
+        """Zapamiętaj viewport przed otwarciem modala lub operacją CRUD.
+
+        Zamknięcie okna modalnego może spowodować relayout rodzica zanim kod
+        odświeży model tabeli. Wtedy bieżące GtkAdjustment bywa już ustawione na
+        początek. Jawny snapshot wykonany przed modalem eliminuje ten wyścig.
+        """
+        self._pinned_refresh_view_state = self._capture_refresh_view_state()
 
     def _build_filter_popover(self) -> Gtk.Popover:
         popover = Gtk.Popover()
@@ -654,7 +664,8 @@ class DataTable(Gtk.Box):
         # CRUD refreshes replace all rows in Gio.ListStore. Preserve the current
         # table viewport and selection so saving a record does not jump the user
         # back to the first row of a long collection.
-        view_state = self._capture_refresh_view_state()
+        view_state = self._pinned_refresh_view_state or self._capture_refresh_view_state()
+        self._pinned_refresh_view_state = None
         self._source_records = list(records)
         if self.grouped:
             valid_ids = {
@@ -995,11 +1006,26 @@ class Choice:
         self.label = label
 
 
+
+
+def _configure_dropdown_search(dropdown: Gtk.DropDown) -> None:
+    """Włącz rzeczywiste filtrowanie tekstowe w Gtk.DropDown.
+
+    Samo ``set_enable_search(True)`` wyświetla pole wyszukiwania, ale GTK
+    wymaga również wyrażenia zwracającego tekst elementu. Bez niego wpisywanie
+    frazy nie filtruje listy. Dla Gtk.StringList elementami są Gtk.StringObject.
+    """
+    expression = Gtk.PropertyExpression.new(Gtk.StringObject, None, "string")
+    dropdown.set_expression(expression)
+    dropdown.set_enable_search(True)
+    if hasattr(dropdown, "set_search_match_mode"):
+        dropdown.set_search_match_mode(Gtk.StringFilterMatchMode.SUBSTRING)
+
 class ChoiceDropDown(Gtk.DropDown):
     def __init__(self, choices: Sequence[Choice], selected_id: int | None = None) -> None:
         self.choices: list[Choice] = []
         super().__init__()
-        self.set_enable_search(True)
+        _configure_dropdown_search(self)
         self.set_choices(choices, selected_id)
 
     def identifier(self) -> int | None:
@@ -1028,7 +1054,7 @@ class TextDropDown(Gtk.DropDown):
         values = list(dict.fromkeys([*choices, *([selected] if selected and selected not in choices else [])]))
         self.values = values
         super().__init__(model=Gtk.StringList.new(values))
-        self.set_enable_search(True)
+        _configure_dropdown_search(self)
         if selected in values:
             self.set_selected(values.index(selected))
 

@@ -1145,6 +1145,8 @@ class SesyjkaWindow(Adw.ApplicationWindow):
     def show_history(self) -> None:
         dialog = ModalWindow(self, "Historia zmian", width=720, height=620)
         history_text = (
+            "0.9.18\n"
+            "Naprawiono wyszukiwanie w rozwijanych polach formularzy. Gtk.DropDown otrzymuje teraz jawne wyrażenie tekstowe i dopasowanie fragmentu tekstu. Wszystkie główne tabele przypinają pozycję przewijania i zaznaczenie przed otwarciem edytora oraz operacjami CRUD, dzięki czemu zapis zmian nie przenosi widoku na początek listy.\n\n"
             "0.9.17\n"
             "Pozycja typu Grupa ma teraz wyłącznie pola Nazwa, Typ i System RPG. Przy uruchomieniu stare metadane grup są usuwane z bazy po utworzeniu kopii bezpieczeństwa, a Cloud nie przywraca ich ze starszych rekordów. Wykres Wartość pozycji agreguje teraz wartość pozycji RPG według systemu RPG zamiast według tytułu.\n\n"
             "0.9.16\n"

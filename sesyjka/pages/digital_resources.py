@@ -202,6 +202,7 @@ class DigitalResourcesPage(CrudPage):
                     },
                     int(record["id"]) if record else None,
                 )
+                self.table.pin_refresh_view_state()
                 dialog.close()
                 self.refresh()
                 self.notify_data_changed()
@@ -293,6 +294,7 @@ class DigitalResourcesPage(CrudPage):
                     resource_id,
                     {"typ": kind.text(), "url": value, "preferowana": preferred.get_active()},
                 )
+                self.table.pin_refresh_view_state()
                 dialog.close()
                 parent.close()
                 self.refresh()
@@ -508,6 +510,7 @@ class DigitalResourcesPage(CrudPage):
                     }
                 )
                 dialog.close()
+                self.table.pin_refresh_view_state()
                 parent.close()
                 self.show_storages()
                 self.refresh()
@@ -530,6 +533,7 @@ class DigitalResourcesPage(CrudPage):
             try:
                 self.repository.save_storage_root({"nazwa": name.get_text(), "typ": kind.text(), "sciezka_bazowa": str(path)})
                 form_dialog.close()
+                self.table.pin_refresh_view_state()
                 parent.close()
                 self.show_storages()
                 self.refresh()

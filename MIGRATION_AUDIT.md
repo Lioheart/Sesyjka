@@ -44,7 +44,7 @@ Agregacja odbywa się w `Repository.statistics()`, poza widgetami. Widok renderu
 
 ## Sesyjka Cloud
 
-Wersja 0.9.17 zachowuje niezależną warstwę synchronizacji. `sync.db` nie należy do `DB_FILES` i nie jest częścią importu ani eksportu baz domenowych. Zawiera identyfikator urządzenia, hasze ostatnio zsynchronizowanych rekordów, kolejkę zmienionych baz, zdalny kursor `updated_at` i nierozwiązane konflikty ze starszych wersji.
+Wersja 0.9.18 zachowuje niezależną warstwę synchronizacji. `sync.db` nie należy do `DB_FILES` i nie jest częścią importu ani eksportu baz domenowych. Zawiera identyfikator urządzenia, hasze ostatnio zsynchronizowanych rekordów, kolejkę zmienionych baz, zdalny kursor `updated_at` i nierozwiązane konflikty ze starszych wersji.
 
 Klient Supabase korzysta z Auth oraz Data REST API przez standardową bibliotekę `urllib`, więc pakiety systemowe nie zyskują dodatkowej zależności Python. Lokalny CRUD nie zależy od sieci. Synchronizacja okresowa skanuje tylko lokalne pliki baz oznaczone jako zmienione, porównuje stabilny JSON i hasze SHA-256 oraz wysyła wyłącznie rekordy różniące się od ostatniej wersji. Zdalne rekordy są pobierane przyrostowo od kursora `updated_at`. Jeżeli obie strony zmieniły ten sam rekord, pierwszeństwo ma bieżąca wersja lokalna. Zmiana z chmury jest stosowana lokalnie tylko wtedy, gdy lokalny rekord nie zmienił się od ostatniej synchronizacji.
 

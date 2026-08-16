@@ -51,6 +51,7 @@ class PublishersPage(CrudPage):
                     {"nazwa": name.get_text(), "kraj": country.get_text(), "strona": website.get_text()},
                     int(record["id"]) if record else None,
                 )
+                self.table.pin_refresh_view_state()
                 dialog.close()
                 self.refresh()
                 self.notify_data_changed()

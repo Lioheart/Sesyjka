@@ -178,6 +178,7 @@ class BoardGamesPage(CrudPage):
                     },
                     int(record["id"]) if record else None,
                 )
+                self.table.pin_refresh_view_state()
                 dialog.close()
                 self.refresh()
                 self.notify_data_changed()

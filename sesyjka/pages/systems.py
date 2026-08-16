@@ -231,6 +231,7 @@ class SystemsPage(CrudPage):
             self.request_delete(record)
             return
         game_system_id = int(record["game_system_id"])
+        self.table.pin_refresh_view_state()
         confirm(
             self.parent_window,
             "Usuń system RPG",
@@ -331,6 +332,7 @@ class SystemsPage(CrudPage):
                     },
                     int(record["game_system_id"]) if record else None,
                 )
+                self.table.pin_refresh_view_state()
                 dialog.close()
                 self.refresh()
                 self.notify_data_changed()
@@ -961,6 +963,7 @@ class SystemsPage(CrudPage):
                     payload,
                     int(record["id"]) if record else None,
                 )
+                self.table.pin_refresh_view_state()
                 dialog.close()
                 self.refresh()
                 self.notify_data_changed()

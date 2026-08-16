@@ -79,6 +79,11 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="0.9.18" date="2026-08-16">
+      <description>
+        <p>Naprawiono wyszukiwanie w polach wyboru formularzy oraz trwałe zachowanie viewportu i zaznaczenia tabel podczas zapisu.</p>
+      </description>
+    </release>
     <release version="0.9.17" date="2026-08-16">
       <description>
         <p>RPG groups now store only their organizational fields, legacy group metadata is safely migrated away, and collection value is charted by RPG system.</p>
