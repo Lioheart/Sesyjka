@@ -60,6 +60,16 @@ class ApplicationSourceTests(unittest.TestCase):
         ):
             self.assertIn(token, source)
 
+    def test_table_refresh_preserves_selection_and_scroll_position(self) -> None:
+        source = (self.root / "sesyjka" / "widgets.py").read_text(encoding="utf-8")
+        for token in (
+            "_capture_refresh_view_state",
+            "_restore_refresh_view_state",
+            "self.scroller.get_vadjustment()",
+            "self.add_tick_callback(self._restore_refresh_view_state",
+        ):
+            self.assertIn(token, source)
+
     def test_popovers_are_not_overridden_by_generic_background_css(self) -> None:
         source = (self.root / "sesyjka" / "app.py").read_text(encoding="utf-8")
         self.assertIn(".app-background", source)

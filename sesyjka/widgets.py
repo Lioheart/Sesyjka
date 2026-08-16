@@ -208,11 +208,11 @@ class DataTable(Gtk.Box):
 
         self.view.connect("activate", self._on_activate)
 
-        scroller = Gtk.ScrolledWindow()
-        scroller.add_css_class("data-table-scroller")
-        scroller.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
-        scroller.set_child(self.view)
-        self.append(scroller)
+        self.scroller = Gtk.ScrolledWindow()
+        self.scroller.add_css_class("data-table-scroller")
+        self.scroller.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        self.scroller.set_child(self.view)
+        self.append(self.scroller)
 
     def _build_filter_popover(self) -> Gtk.Popover:
         popover = Gtk.Popover()
@@ -344,7 +344,53 @@ class DataTable(Gtk.Box):
         self._global_filter = value
         self._rebuild_store()
 
+    @staticmethod
+    def _record_identity(record: dict[str, Any] | None) -> tuple[str, str] | None:
+        if record is None:
+            return None
+        if record.get("_is_group") and not record.get("_is_entity"):
+            return ("group", DataTable._group_id(record))
+        identifier = record.get("id")
+        if identifier is None:
+            return None
+        return (str(record.get("_record_kind") or "entity"), str(identifier))
+
+    def _capture_refresh_view_state(self) -> tuple[tuple[str, str] | None, float, float]:
+        selected = self._record_identity(self.selected_record())
+        horizontal = float(self.scroller.get_hadjustment().get_value())
+        vertical = float(self.scroller.get_vadjustment().get_value())
+        return selected, horizontal, vertical
+
+    @staticmethod
+    def _restore_adjustment(adjustment: Gtk.Adjustment, value: float) -> None:
+        lower = float(adjustment.get_lower())
+        upper = float(adjustment.get_upper())
+        page_size = float(adjustment.get_page_size())
+        maximum = max(lower, upper - page_size)
+        adjustment.set_value(min(max(float(value), lower), maximum))
+
+    def _restore_refresh_view_state(
+        self,
+        _widget: Gtk.Widget,
+        _frame_clock: Gdk.FrameClock,
+        state: tuple[tuple[str, str] | None, float, float],
+    ) -> bool:
+        selected_identity, horizontal, vertical = state
+        if selected_identity is not None:
+            for position in range(int(self.selection.get_n_items())):
+                item = self.selection.get_item(position)
+                if isinstance(item, TableRow) and self._record_identity(item.record) == selected_identity:
+                    self.selection.set_selected(position)
+                    break
+        self._restore_adjustment(self.scroller.get_hadjustment(), horizontal)
+        self._restore_adjustment(self.scroller.get_vadjustment(), vertical)
+        return False
+
     def set_records(self, records: Sequence[dict[str, Any]]) -> None:
+        # CRUD refreshes replace all rows in Gio.ListStore. Preserve the current
+        # table viewport and selection so saving a record does not jump the user
+        # back to the first row of a long collection.
+        view_state = self._capture_refresh_view_state()
         self._source_records = list(records)
         if self.grouped:
             valid_ids = {
@@ -354,6 +400,7 @@ class DataTable(Gtk.Box):
             }
             self._collapsed_groups.intersection_update(valid_ids)
         self._rebuild_store()
+        self.add_tick_callback(self._restore_refresh_view_state, view_state)
 
     def _rebuild_store(self) -> None:
         self.store.remove_all()

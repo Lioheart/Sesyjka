@@ -79,6 +79,12 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="0.9.12" date="2026-08-16">
+      <description>
+        <p>Linked PDF and VTT resources now update the corresponding RPG item format flags, while CRUD table refreshes preserve selection, scroll position and expanded groups.</p>
+        <p xml:lang="pl">Powiązane zasoby PDF i VTT aktualizują znaczniki formatów pozycji RPG, a odświeżenie tabel po zapisie zachowuje zaznaczenie, pozycję przewijania i rozwinięte grupy.</p>
+      </description>
+    </release>
     <release version="0.9.11" date="2026-08-16">
       <description>
         <p>Cloud synchronization is now periodic and incremental. Local edits are queued without network activity, remote reads use an updated-at cursor, and the local SQLite record wins when both sides changed.</p>

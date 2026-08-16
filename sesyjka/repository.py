@@ -1097,6 +1097,56 @@ class Repository:
             result.append(item)
         return result
 
+    @staticmethod
+    def _vtt_label_from_resource(resource_format: Any, provider: Any) -> str:
+        candidates = [str(resource_format or "").strip(), str(provider or "").strip()]
+        platform_tokens = ("foundry", "roll20", "fantasy grounds", "vtt")
+        for candidate in candidates:
+            if candidate and any(token in candidate.casefold() for token in platform_tokens):
+                return candidate
+        return "VTT"
+
+    def _mark_position_formats_from_resources(
+        self,
+        resources: list[tuple[int | None, str, Any, Any]],
+    ) -> None:
+        """Propagate linked digital formats to RPG collection flags.
+
+        This is intentionally additive. Linking a PDF or VTT marks the matching
+        format on the RPG position, but unlinking or deleting a resource never
+        clears a flag that may have been set manually or may describe another
+        copy owned by the user.
+        """
+        updates: dict[int, dict[str, Any]] = {}
+        for raw_position_id, raw_type, resource_format, provider in resources:
+            if raw_position_id in (None, ""):
+                continue
+            position_id = int(raw_position_id)
+            resource_type = str(raw_type or "").strip().casefold()
+            state = updates.setdefault(position_id, {"pdf": False, "vtt": None})
+            if resource_type == "pdf":
+                state["pdf"] = True
+            elif resource_type == "vtt" and not state["vtt"]:
+                state["vtt"] = self._vtt_label_from_resource(resource_format, provider)
+
+        if not updates:
+            return
+        with self.db.connect("systemy_rpg.db", write=True) as connection:
+            for position_id, state in updates.items():
+                if state["pdf"]:
+                    connection.execute(
+                        "UPDATE systemy_rpg SET pdf=1 WHERE id=? AND COALESCE(pdf, 0)=0",
+                        (position_id,),
+                    )
+                if state["vtt"]:
+                    connection.execute(
+                        """
+                        UPDATE systemy_rpg SET vtt=?
+                        WHERE id=? AND TRIM(COALESCE(vtt, ''))=''
+                        """,
+                        (str(state["vtt"]), position_id),
+                    )
+
     def save_digital_resource(self, values: dict[str, Any], record_id: int | None = None) -> int:
         name = str(values.get("nazwa") or "").strip()
         if not name:
@@ -1131,6 +1181,9 @@ class Repository:
                     f"UPDATE zasoby SET {assignments}, zmodyfikowano=CURRENT_TIMESTAMP WHERE id=?",
                     (*payload, record_id),
                 )
+        self._mark_position_formats_from_resources(
+            [(position_id, resource_type, normalized.get("format"), normalized.get("dostawca"))]
+        )
         return int(record_id)
 
     def delete_digital_resource(self, record_id: int) -> None:
@@ -1212,6 +1265,7 @@ class Repository:
             raise ValueError("Wybrany magazyn nie istnieje.")
         storage_uuid = str(storage["uuid"])
         created = linked = existing = 0
+        linked_positions: set[int] = set()
         with self.db.connect("zasoby.db", write=True) as connection:
             for scanned in scan_results:
                 duplicate = connection.execute(
@@ -1226,7 +1280,10 @@ class Repository:
                             "UPDATE zasoby SET pozycja_rpg_id=?, zmodyfikowano=CURRENT_TIMESTAMP WHERE id=?",
                             (int(scanned.suggested_rpg_id), resource_id),
                         )
+                        linked_positions.add(int(scanned.suggested_rpg_id))
                         linked += 1
+                    elif duplicate["pozycja_rpg_id"] is not None:
+                        linked_positions.add(int(duplicate["pozycja_rpg_id"]))
                 else:
                     resource_id = int(connection.execute("SELECT COALESCE(MAX(id),0)+1 FROM zasoby").fetchone()[0])
                     connection.execute(
@@ -1247,6 +1304,7 @@ class Repository:
                     )
                     created += 1
                     if scanned.suggested_rpg_id is not None:
+                        linked_positions.add(int(scanned.suggested_rpg_id))
                         linked += 1
                 exists_location = connection.execute(
                     """
@@ -1266,6 +1324,9 @@ class Repository:
                         """,
                         (location_id, resource_id, storage_uuid, scanned.relative_path),
                     )
+        self._mark_position_formats_from_resources(
+            [(position_id, "PDF", "PDF", "Plik lokalny") for position_id in sorted(linked_positions)]
+        )
         return {"created": created, "linked": linked, "existing": existing, "found": len(scan_results)}
 
     def import_drivethru_library(self, items: list[Any]) -> dict[str, int]:
@@ -1278,6 +1339,7 @@ class Repository:
         from .digital_resources import match_rpg_item
 
         created = updated = linked = 0
+        linked_formats: list[tuple[int | None, str, Any, Any]] = []
         with self.db.connect("zasoby.db", write=True) as connection:
             for entry in items:
                 isbn = re.sub(r"[^0-9Xx]", "", str(entry.isbn or "")).upper()
@@ -1336,6 +1398,9 @@ class Repository:
                     created += 1
                 if position_id is not None:
                     linked += 1
+                    linked_formats.append(
+                        (position_id, entry.resource_type, entry.format_name, "DriveThruRPG")
+                    )
                 provider_ref = f"{entry.order_product_id}:{entry.file_index if entry.file_index is not None else 'product'}"
                 location = connection.execute(
                     "SELECT id FROM lokalizacje WHERE zasob_id=? AND typ='DriveThruRPG'",
@@ -1356,6 +1421,7 @@ class Repository:
                         """,
                         (location_id, resource_id, entry.product_url, provider_ref),
                     )
+        self._mark_position_formats_from_resources(linked_formats)
         return {"created": created, "updated": updated, "linked": linked, "found": len(items)}
 
     def statistics(self) -> dict[str, Any]:

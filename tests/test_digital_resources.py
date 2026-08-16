@@ -56,6 +56,54 @@ class DigitalResourceTests(unittest.TestCase):
             }
         self.assertTrue({"zasoby", "lokalizacje", "magazyny"}.issubset(tables))
 
+    def test_linked_resource_marks_pdf_and_vtt_on_rpg_position(self) -> None:
+        initial = next(item for item in self.repo.systems() if item["id"] == self.position_id)
+        self.assertFalse(bool(initial["pdf"]))
+        self.assertFalse(str(initial["vtt"] or "").strip())
+
+        self.repo.save_digital_resource(
+            {
+                "pozycja_rpg_id": self.position_id,
+                "typ": "PDF",
+                "nazwa": "Player Core PDF",
+                "format": "PDF",
+            }
+        )
+        after_pdf = next(item for item in self.repo.systems() if item["id"] == self.position_id)
+        self.assertTrue(bool(after_pdf["pdf"]))
+
+        self.repo.save_digital_resource(
+            {
+                "pozycja_rpg_id": self.position_id,
+                "typ": "VTT",
+                "nazwa": "Player Core VTT",
+                "format": "Foundry VTT",
+            }
+        )
+        after_vtt = next(item for item in self.repo.systems() if item["id"] == self.position_id)
+        self.assertEqual(after_vtt["vtt"], "Foundry VTT")
+
+    def test_linked_vtt_resource_does_not_overwrite_manual_platform(self) -> None:
+        current = next(item for item in self.repo.systems() if item["id"] == self.position_id)
+        self.repo.save_system(
+            {
+                **current,
+                "system_gry_id": current["system_gry_id"],
+                "vtt": "Roll20",
+            },
+            self.position_id,
+        )
+        self.repo.save_digital_resource(
+            {
+                "pozycja_rpg_id": self.position_id,
+                "typ": "VTT",
+                "nazwa": "Foundry package",
+                "format": "Foundry VTT",
+            }
+        )
+        updated = next(item for item in self.repo.systems() if item["id"] == self.position_id)
+        self.assertEqual(updated["vtt"], "Roll20")
+
     def test_storage_keeps_relative_path_and_resolves_file(self) -> None:
         library = self.root / "RPG"
         library.mkdir()
@@ -126,6 +174,8 @@ class DigitalResourceTests(unittest.TestCase):
         resource = self.repo.digital_resources()[0]
         self.assertEqual(resource["pozycja_rpg_id"], self.position_id)
         self.assertEqual(resource["dostepnosc"], "Dostępny lokalnie")
+        position = next(item for item in self.repo.systems() if item["id"] == self.position_id)
+        self.assertTrue(bool(position["pdf"]))
 
     def test_low_confidence_filename_is_not_linked(self) -> None:
         identifier, score = match_rpg_item("completely-unrelated-document.pdf", self.repo.systems())

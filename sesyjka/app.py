@@ -1126,6 +1126,8 @@ class SesyjkaWindow(Adw.ApplicationWindow):
     def show_history(self) -> None:
         dialog = ModalWindow(self, "Historia zmian", width=720, height=620)
         history_text = (
+            "0.9.12\n"
+            "Powiązanie zasobu PDF lub VTT z pozycją RPG automatycznie zaznacza odpowiadający format w kolekcji bez nadpisywania ręcznie ustawionej platformy VTT. Odświeżanie tabel po zapisie zachowuje pozycję przewijania, zaznaczenie i rozwinięte grupy, więc długa lista nie wraca do początku.\n\n"
             "0.9.11\n"
             "Zmieniono Sesyjka Cloud na synchronizację okresową. Edycje nie wywołują już synchronizacji po kilku sekundach. sync.db śledzi lokalnie zmienione bazy, a kolejne przebiegi skanują tylko te bazy i pobierają z Supabase wyłącznie rekordy zmienione od poprzedniego kursora. Przy kolizji zmian lokalna baza ma pierwszeństwo. Dodano wykrywanie zmian wykonanych w plikach SQLite poza uruchomioną aplikacją.\n\n"
             "0.9.10\n"
