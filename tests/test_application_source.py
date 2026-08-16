@@ -197,6 +197,14 @@ class ApplicationSourceTests(unittest.TestCase):
         self.assertIn('OAUTH_CALLBACK_PORT = 8765', oauth)
 
 
+    def test_cloud_auto_sync_is_periodic_not_debounced_after_crud(self) -> None:
+        app = (self.root / "sesyjka" / "app.py").read_text(encoding="utf-8")
+        self.assertIn('Gtk.CheckButton(label="Automatycznie synchronizuj okresowo")', app)
+        self.assertIn("def _cloud_sync_due", app)
+        self.assertNotIn("_schedule_cloud_sync_after_local_change", app)
+        self.assertNotIn("_cloud_debounce_source", app)
+        self.assertNotIn("_run_debounced_cloud_sync", app)
+
     def test_cloud_backend_is_bundled_and_not_configured_in_gui(self) -> None:
         app = (self.root / "sesyjka" / "app.py").read_text(encoding="utf-8")
         config = (self.root / "sesyjka" / "config.py").read_text(encoding="utf-8")

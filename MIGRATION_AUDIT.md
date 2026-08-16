@@ -44,9 +44,9 @@ Agregacja odbywa się w `Repository.statistics()`, poza widgetami. Widok renderu
 
 ## Sesyjka Cloud
 
-Wersja 0.9.10 zachowuje niezależną warstwę synchronizacji. `sync.db` nie należy do `DB_FILES` i nie jest częścią importu ani eksportu baz domenowych. Zawiera identyfikator urządzenia, hasze ostatnio zsynchronizowanych rekordów i nierozwiązane konflikty.
+Wersja 0.9.11 zachowuje niezależną warstwę synchronizacji. `sync.db` nie należy do `DB_FILES` i nie jest częścią importu ani eksportu baz domenowych. Zawiera identyfikator urządzenia, hasze ostatnio zsynchronizowanych rekordów, kolejkę zmienionych baz, zdalny kursor `updated_at` i nierozwiązane konflikty ze starszych wersji.
 
-Klient Supabase korzysta z Auth oraz Data REST API przez standardową bibliotekę `urllib`, więc pakiety systemowe nie zyskują dodatkowej zależności Python. Lokalny CRUD nie zależy od sieci. Synchronizacja skanuje rekordy baz domenowych, w tym zasoby cyfrowe, porównuje stabilny JSON i hasze SHA-256 oraz wysyła zmiany lub pobiera wersje chmurowe. Jeżeli obie strony zmieniły rekord od ostatniej udanej synchronizacji, automatyczne nadpisanie jest zatrzymywane.
+Klient Supabase korzysta z Auth oraz Data REST API przez standardową bibliotekę `urllib`, więc pakiety systemowe nie zyskują dodatkowej zależności Python. Lokalny CRUD nie zależy od sieci. Synchronizacja okresowa skanuje tylko lokalne pliki baz oznaczone jako zmienione, porównuje stabilny JSON i hasze SHA-256 oraz wysyła wyłącznie rekordy różniące się od ostatniej wersji. Zdalne rekordy są pobierane przyrostowo od kursora `updated_at`. Jeżeli obie strony zmieniły ten sam rekord, pierwszeństwo ma bieżąca wersja lokalna. Zmiana z chmury jest stosowana lokalnie tylko wtedy, gdy lokalny rekord nie zmienił się od ostatniej synchronizacji.
 
 Schemat backendu znajduje się w `supabase/schema.sql`. Tabela chmurowa ma włączone Row Level Security i polityki ograniczone do `auth.uid()` roli `authenticated`. Aplikacja przyjmuje wyłącznie klucz publishable/anon.
 
@@ -66,7 +66,7 @@ Wersja wynikowa buduje pakiety DEB, RPM i instalator ogólny przez GitHub Action
 4. Testy integralności powiązań pomiędzy bazami.
 5. Testy źródłowe tabel, motywu, popoverów, statystyk i ikony Wayland.
 6. Testy pakietów Release, metadanych, sum kontrolnych i aktualizatora.
-7. Testy `sync.db`, uploadu, pobierania, tombstone i konfliktów Sesyjka Cloud.
+7. Testy `sync.db`, kolejki zmian, przyrostowego kursora, uploadu, pobierania, tombstone i lokalnego priorytetu Sesyjka Cloud.
 8. Kontrola składni skryptów Bash.
 9. Skan kodu pod kątem Tkintera, CustomTkintera i tksheet.
 

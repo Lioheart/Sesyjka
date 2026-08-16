@@ -1,4 +1,4 @@
-# Sesyjka GTK4 0.9.10
+# Sesyjka GTK4 0.9.11
 
 Natywna aplikacja dla Linuksa zbudowana w Pythonie, GTK4 i Libadwaita. Program kataloguje systemy RPG, podręczniki, suplementy, sesje, graczy, wydawców oraz gry planszowe i karciane.
 
@@ -6,7 +6,7 @@ Repozytorium wynikowe: https://github.com/Lioheart/Sesyjka
 
 Projekt źródłowy i atrybucja: https://github.com/ZuraffPL/sesyjka
 
-## Sesyjka Cloud 0.9.10
+## Sesyjka Cloud 0.9.11
 
 Sesyjka działa teraz w modelu **offline-first**. Wszystkie dotychczasowe bazy SQLite nadal są lokalnym źródłem danych i program działa bez Internetu. Osobna baza `sync.db` przechowuje wyłącznie stan synchronizacji, identyfikator urządzenia i konflikty. Nie dodaje żadnych kolumn ani tabel do `systemy_rpg.db`, `sesje_rpg.db`, `gracze.db`, `wydawcy.db` ani `planszowe.db`. Nowa biblioteka cyfrowa korzysta z osobnego `zasoby.db`, więc cztery bazy projektu źródłowego pozostają bez zmian.
 
@@ -21,11 +21,11 @@ Konfiguracja backendu wykonywana jest jeden raz przez administratora projektu Se
 
 Szczegółowa instrukcja znajduje się w `supabase/README.md`. Deweloper może nadal tymczasowo nadpisać produkcyjny backend przez `SESYJKA_SUPABASE_URL` i `SESYJKA_SUPABASE_KEY`.
 
-Synchronizacja działa ręcznie oraz automatycznie. Po lokalnej zmianie uruchamiana jest z krótkim opóźnieniem, a dodatkowo aplikacja wykonuje synchronizację okresową. Brak sieci nie blokuje CRUD. W nagłówku widoczny jest stan `Cloud`, godzina ostatniej synchronizacji albo liczba konfliktów.
+Synchronizacja działa ręcznie oraz automatycznie w ustalonym interwale. Lokalna edycja nie uruchamia połączenia z siecią. Zmiana jest zapisywana natychmiast w SQLite i oznaczana w `sync.db` jako oczekująca. Kolejny przebieg skanuje tylko lokalne bazy zmienione od poprzedniej synchronizacji, a z Supabase pobiera rekordy zmienione od zapisanego kursora `updated_at`. Do chmury wysyłane są tylko rekordy, których zawartość rzeczywiście różni się od ostatnio zsynchronizowanej wersji. Zmiany wykonane bezpośrednio w plikach SQLite podczas wyłączonej aplikacji są wykrywane przez odciski plików.
 
-Jeżeli ten sam rekord zmienił się po obu stronach od ostatniej synchronizacji, Sesyjka nie nadpisuje go automatycznie. Okno konfliktów pokazuje lokalny i chmurowy JSON oraz pozwala jawnie wybrać `Zachowaj lokalne` albo `Zachowaj chmurę`. Usunięcia są synchronizowane jako tombstone, dlatego można propagować je między urządzeniami.
+Jeżeli ten sam rekord zmienił się lokalnie i w chmurze, pierwszeństwo ma aktualny rekord z lokalnej bazy SQLite. Jeżeli lokalny rekord nie zmienił się od poprzedniej synchronizacji, zmiana z chmury może zostać zastosowana lokalnie. Usunięcia są synchronizowane jako jawne tombstone `deleted=true`. Okno konfliktów pozostaje dostępne do obsługi nierozwiązanych konfliktów zapisanych przez starsze wersje programu.
 
-Sesyjka nie otrzymuje ani nie zapisuje hasła Discord. Logowanie odbywa się w domyślnej przeglądarce w przepływie OAuth PKCE. Token odświeżania jest chroniony uprawnieniami pliku `0600`, ale w wersji 0.9.10 nie jest szyfrowany przez Sesyjkę. Nie kopiuj pliku sesji między użytkownikami ani urządzeniami. Token sesji jest przechowywany w `${XDG_CONFIG_HOME:-~/.config}/sesyjka/cloud-session.json` z prawami `0600`.
+Sesyjka nie otrzymuje ani nie zapisuje hasła Discord. Logowanie odbywa się w domyślnej przeglądarce w przepływie OAuth PKCE. Token odświeżania jest chroniony uprawnieniami pliku `0600`, ale w wersji 0.9.11 nie jest szyfrowany przez Sesyjkę. Nie kopiuj pliku sesji między użytkownikami ani urządzeniami. Token sesji jest przechowywany w `${XDG_CONFIG_HOME:-~/.config}/sesyjka/cloud-session.json` z prawami `0600`.
 
 ## Funkcje
 
@@ -54,6 +54,14 @@ Formularz pozycji RPG ma dzielony układ. Około 60% szerokości zajmują pola e
 
 Wyszukiwanie ISBN korzysta z publicznego API Biblioteki Narodowej, Open Library oraz Google Books. ISBN jest normalizowany przed wyszukiwaniem, dlatego myślniki i spacje nie mają wpływu na wynik. Program wylicza również odpowiadający ISBN-10 lub ISBN-13 i próbuje oba identyfikatory. Google Books jest przeszukiwane kolejno po `isbn:`, po samym numerze oraz, gdy katalog biblioteczny dostarczy tytuł, także po tytule i wydawcy. Okładki są pobierane z wielu kandydatów. Jeżeli API Google nie zwraca `imageLinks`, program próbuje front cover po identyfikatorze woluminu Google Books. Okładki są zapisywane w `${XDG_CACHE_HOME:-~/.cache}/sesyjka/covers/`, a metadane i informacja o zakończonej próbie pobrania okładki w `${XDG_CACHE_HOME:-~/.cache}/sesyjka/books/`. Automatyczne otwarcie rekordu najpierw korzysta z tego cache. Przycisk `Pobierz z ISBN` wymusza odświeżenie z internetu. Opcjonalnie można ustawić `SESYJKA_GOOGLE_BOOKS_API_KEY`.
 
+## Zmiany w 0.9.11
+
+- automatyczna synchronizacja nie uruchamia się już po każdej lokalnej edycji. Zmiany oczekują w `sync.db` do następnego interwału lub ręcznego polecenia `Synchronizuj teraz`
+- kolejne przebiegi są przyrostowe. Lokalnie skanowane są tylko bazy, które uległy zmianie, a Supabase jest odpytywany od kursora `updated_at`. Niezmienione rekordy nie są ponownie wysyłane
+- pobieranie zmian z Supabase jest stronicowane, dlatego pełna synchronizacja i większe porcje zmian nie kończą się na pierwszej stronie wyników
+- przy jednoczesnej zmianie tego samego rekordu po obu stronach pierwszeństwo ma lokalna baza SQLite. Stare nierozwiązane konflikty są podczas następnej udanej synchronizacji domykane zgodnie z tą regułą
+- dodano wykrywanie zmian wykonanych bezpośrednio w plikach SQLite poza uruchomioną Sesyjką przez porównanie rozmiaru i czasu modyfikacji plików
+- domyślny interwał dla nowych instalacji wynosi 15 minut. W GUI można ustawić od 1 minuty do 24 godzin. Istniejące ustawienie użytkownika jest zachowywane
 ## Zmiany w 0.9.10
 
 - naprawiono błąd Sesyjka Cloud, który przy przerwaniu synchronizacji mógł pozostawić część lokalnych baz w stanie pośrednim. Przed zastosowaniem zmian z chmury tworzona jest spójna kopia bezpieczeństwa, a przy dowolnym błędzie lokalne bazy i `sync.db` są automatycznie przywracane
@@ -245,7 +253,7 @@ sync.db
 
 Pierwsze cztery pliki zachowują schematy zgodne z projektem `ZuraffPL/sesyjka`. Nowa funkcja planszówek nie dodaje tabel ani kolumn do tych baz. Jest przechowywana wyłącznie w `planszowe.db`.
 
-Import i tryb gościa nadal akceptują zestaw zawierający tylko cztery oryginalne bazy. W takim przypadku zakładka gier planszowych pozostaje pusta. Eksport tworzony przez wersję 0.9.10 zawiera sześć baz danych użytkownika, w tym `planszowe.db` i `zasoby.db`. `sync.db` nie jest eksportowany, ponieważ zawiera stan konkretnego konta i urządzenia.
+Import i tryb gościa nadal akceptują zestaw zawierający tylko cztery oryginalne bazy. W takim przypadku zakładka gier planszowych pozostaje pusta. Eksport tworzony przez wersję 0.9.11 zawiera sześć baz danych użytkownika, w tym `planszowe.db` i `zasoby.db`. `sync.db` nie jest eksportowany, ponieważ zawiera stan konkretnego konta i urządzenia.
 
 Log diagnostyczny:
 

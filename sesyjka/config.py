@@ -72,7 +72,7 @@ def load_settings() -> dict[str, Any]:
         "check_updates": True,
         "last_update_check": 0,
         "cloud_auto_sync": True,
-        "cloud_sync_interval": 300,
+        "cloud_sync_interval": 900,
     }
     try:
         loaded = json.loads(settings_path().read_text(encoding="utf-8"))

@@ -25,7 +25,7 @@ from .oauth import LoopbackOAuthReceiver, build_discord_authorize_url, create_pk
 
 LOG = logging.getLogger(__name__)
 DELETED_HASH = "__deleted__"
-DEFAULT_SYNC_INTERVAL = 300
+DEFAULT_SYNC_INTERVAL = 900
 
 
 class CloudError(RuntimeError):
@@ -240,6 +240,10 @@ class SyncStore:
                 CREATE UNIQUE INDEX IF NOT EXISTS sync_conflicts_open_idx
                     ON sync_conflicts(entity_type, record_key)
                     WHERE resolved_at IS NULL;
+                CREATE TABLE IF NOT EXISTS sync_dirty_databases (
+                    db_file TEXT PRIMARY KEY,
+                    changed_generation INTEGER NOT NULL
+                );
                 """
             )
             if self.get_meta("device_id") is None:
@@ -292,6 +296,60 @@ class SyncStore:
                     last_synced_at=CURRENT_TIMESTAMP
                 """,
                 (entity_type, record_key, local_hash, remote_hash, int(remote_version)),
+            )
+            connection.commit()
+
+    def mapping_keys(self, entity_type: str) -> set[str]:
+        with self._lock, closing(self.connect()) as connection:
+            rows = connection.execute(
+                "SELECT record_key FROM sync_mappings WHERE entity_type=?",
+                (entity_type,),
+            ).fetchall()
+        return {str(row["record_key"]) for row in rows}
+
+    def mark_dirty_database(self, db_file: str) -> None:
+        if db_file not in DB_FILES:
+            return
+        generation = time.time_ns()
+        with self._lock, closing(self.connect()) as connection:
+            connection.execute(
+                """
+                INSERT INTO sync_dirty_databases(db_file, changed_generation)
+                VALUES(?, ?)
+                ON CONFLICT(db_file) DO UPDATE SET
+                    changed_generation=excluded.changed_generation
+                """,
+                (db_file, generation),
+            )
+            connection.commit()
+
+    def dirty_databases(self) -> dict[str, int]:
+        with self._lock, closing(self.connect()) as connection:
+            rows = connection.execute(
+                "SELECT db_file, changed_generation FROM sync_dirty_databases ORDER BY db_file"
+            ).fetchall()
+        return {str(row["db_file"]): int(row["changed_generation"]) for row in rows}
+
+    def clear_dirty_databases(self, snapshot: dict[str, int]) -> None:
+        if not snapshot:
+            return
+        with self._lock, closing(self.connect()) as connection:
+            for db_file, generation in snapshot.items():
+                connection.execute(
+                    "DELETE FROM sync_dirty_databases WHERE db_file=? AND changed_generation=?",
+                    (db_file, int(generation)),
+                )
+            connection.commit()
+
+    def resolve_open_conflict(self, entity_type: str, record_key: str, resolution: str = "local-auto") -> None:
+        with self._lock, closing(self.connect()) as connection:
+            connection.execute(
+                """
+                UPDATE sync_conflicts
+                SET resolved_at=CURRENT_TIMESTAMP, resolution=?
+                WHERE entity_type=? AND record_key=? AND resolved_at IS NULL
+                """,
+                (resolution, entity_type, record_key),
             )
             connection.commit()
 
@@ -375,10 +433,14 @@ class SyncStore:
             connection.commit()
 
     def clear_account_state(self) -> None:
-        """Mapowania są zależne od konta. Device ID pozostaje lokalny."""
+        """Mapowania są zależne od konta. Device ID i lokalny dirty-set pozostają lokalne."""
         with self._lock, closing(self.connect()) as connection:
             connection.execute("DELETE FROM sync_mappings")
             connection.execute("DELETE FROM sync_conflicts")
+            connection.execute(
+                "DELETE FROM sync_meta WHERE key IN "
+                "('last_sync_user', 'last_sync_at', 'remote_cursor_at', 'incremental_sync_ready')"
+            )
             connection.commit()
 
 
@@ -493,20 +555,74 @@ class SupabaseHttpClient:
     def sign_out(self, token: str) -> None:
         self._request("/auth/v1/logout", method="POST", token=token)
 
-    def fetch_records(self, token: str, user_id: str) -> list[dict[str, Any]]:
+    def fetch_records(
+        self,
+        token: str,
+        user_id: str,
+        updated_since: str | None = None,
+    ) -> list[dict[str, Any]]:
+        parameters: dict[str, str] = {
+            "select": "id,owner_id,entity_type,record_key,payload,version,deleted,updated_at,device_id",
+            "owner_id": f"eq.{user_id}",
+            "order": "updated_at.asc,id.asc",
+        }
+        if updated_since:
+            # ``gte`` intentionally overlaps the cursor boundary. This can fetch a
+            # few rows twice, but prevents losing rows that received the same
+            # PostgreSQL timestamp at the edge of two synchronization passes.
+            parameters["updated_at"] = f"gte.{updated_since}"
+        query = urllib.parse.urlencode(parameters)
+        path = f"/rest/v1/sesyjka_records?{query}"
+
+        # PostgREST/Supabase limits result sets, so retrieve the complete delta
+        # in stable pages. This matters both for the initial synchronization and
+        # for a large batch of remote changes accumulated between two runs.
+        page_size = 500
+        offset = 0
+        records: list[dict[str, Any]] = []
+        while True:
+            payload = self._request(
+                path,
+                token=token,
+                headers={
+                    "Range-Unit": "items",
+                    "Range": f"{offset}-{offset + page_size - 1}",
+                },
+            )
+            if payload is None:
+                return records
+            if not isinstance(payload, list):
+                raise CloudError("Nieprawidłowa odpowiedź tabeli sesyjka_records.")
+            records.extend(dict(item) for item in payload if isinstance(item, dict))
+            if len(payload) < page_size:
+                return records
+            offset += page_size
+
+    def fetch_record(
+        self,
+        token: str,
+        user_id: str,
+        entity_type: str,
+        record_key: str,
+    ) -> dict[str, Any] | None:
         query = urllib.parse.urlencode(
             {
                 "select": "id,owner_id,entity_type,record_key,payload,version,deleted,updated_at,device_id",
                 "owner_id": f"eq.{user_id}",
-                "order": "entity_type.asc,record_key.asc",
+                "entity_type": f"eq.{entity_type}",
+                "record_key": f"eq.{record_key}",
+                "limit": "1",
             }
         )
         payload = self._request(f"/rest/v1/sesyjka_records?{query}", token=token)
         if payload is None:
-            return []
+            return None
         if not isinstance(payload, list):
             raise CloudError("Nieprawidłowa odpowiedź tabeli sesyjka_records.")
-        return [dict(item) for item in payload if isinstance(item, dict)]
+        for item in payload:
+            if isinstance(item, dict):
+                return dict(item)
+        return None
 
     def upsert_record(
         self,
@@ -561,6 +677,40 @@ class CloudService:
         self._lock = threading.Lock()
         self._active_sync_backup: Path | None = None
         self._active_sync_backup_extended = False
+        self._suppress_local_tracking = 0
+        self.databases.add_write_listener(self._on_local_database_write)
+
+    def _on_local_database_write(self, db_file: str) -> None:
+        if self._suppress_local_tracking:
+            return
+        if any(spec.db_file == db_file for spec in ENTITY_SPECS):
+            self.store.mark_dirty_database(db_file)
+
+    def _database_fingerprint(self, db_file: str) -> str:
+        path = self.databases.own_root / db_file
+        try:
+            stat = path.stat()
+        except FileNotFoundError:
+            return "missing"
+        return f"{stat.st_size}:{stat.st_mtime_ns}"
+
+    def _reconcile_dirty_databases(self) -> None:
+        # The write listener covers changes made by Sesyjka while it is running.
+        # Fingerprints additionally detect manual/external SQLite edits performed
+        # while the application was closed, without modifying domain schemas.
+        for db_file in DB_FILES:
+            current = self._database_fingerprint(db_file)
+            previous = self.store.get_meta(f"db_fingerprint:{db_file}")
+            if previous is None or previous != current:
+                self.store.mark_dirty_database(db_file)
+
+    def _store_database_fingerprints(self) -> None:
+        for db_file in DB_FILES:
+            self.store.set_meta(f"db_fingerprint:{db_file}", self._database_fingerprint(db_file))
+
+    @property
+    def pending_local_databases(self) -> tuple[str, ...]:
+        return tuple(self.store.dirty_databases())
 
     @property
     def session(self) -> CloudSession | None:
@@ -676,48 +826,84 @@ class CloudService:
 
         safety_backup: Path | None = None
         try:
-            # sync.db is small, so snapshot it before any mapping is changed. The
-            # larger domain databases are appended lazily immediately before the
-            # first remote write. If a later record violates an FK or another
-            # error interrupts the pass, the local state can be rolled back as a
-            # coherent unit instead of leaving earlier entities deleted.
             safety_backup = self.databases.create_safety_backup("cloud-sync", ("sync.db",))
             self._active_sync_backup = safety_backup
             self._active_sync_backup_extended = False
 
             session = self.ensure_session(url, key)
             previous_user = self.store.get_meta("last_sync_user")
-            if previous_user and previous_user != session.user_id:
-                # Mapowania i konflikty opisują stan jednego konta. Jeśli plik
-                # sesji został podmieniony albo użytkownik zmienił konto poza GUI,
-                # nie wolno zastosować mapowań poprzedniego właściciela.
+            account_changed = bool(previous_user and previous_user != session.user_id)
+            if account_changed:
+                # Mapping state belongs to exactly one cloud account. Local data
+                # remains authoritative and is reconciled afresh with the new
+                # account on the next pass.
                 self.store.clear_account_state()
-                self.store.set_meta("last_sync_at", "0")
+
+            self._reconcile_dirty_databases()
+            full_sync = (
+                account_changed
+                or self.store.get_meta("incremental_sync_ready") != "1"
+                or self.store.get_meta("last_sync_user") != session.user_id
+            )
+            dirty_snapshot = self.store.dirty_databases()
+            dirty_files = set(dirty_snapshot)
+
             client = self._client(url, key)
-            remote_rows = client.fetch_records(session.access_token, session.user_id)
+            remote_cursor = None if full_sync else self.store.get_meta("remote_cursor_at")
+            remote_rows = client.fetch_records(
+                session.access_token,
+                session.user_id,
+                updated_since=remote_cursor,
+            )
+            remote_complete = full_sync or not remote_cursor
             remote = {
                 (str(row.get("entity_type")), str(row.get("record_key"))): row
                 for row in remote_rows
                 if row.get("entity_type") in ENTITY_BY_NAME and row.get("record_key") is not None
             }
-            local = self._local_snapshot()
+
+            if full_sync:
+                local = self._local_snapshot()
+            else:
+                # Only databases that were actually changed locally are scanned.
+                # Remote delta rows are read individually when their database was
+                # otherwise untouched. No full local snapshot is needed.
+                local = self._local_snapshot(dirty_files)
+                for entity_key in remote:
+                    if entity_key in local:
+                        continue
+                    entity_type, record_key = entity_key
+                    spec = ENTITY_BY_NAME[entity_type]
+                    local[entity_key] = self._local_record(spec, record_key)
+
             report = SyncReport()
 
             for spec in ENTITY_SPECS:
-                keys = sorted(
-                    {
+                if full_sync:
+                    keys = {
                         record_key
                         for entity_type, record_key in set(local) | set(remote)
                         if entity_type == spec.name
-                    },
-                    key=_record_key_sort_key,
-                )
+                    }
+                else:
+                    keys = {
+                        record_key
+                        for entity_type, record_key in remote
+                        if entity_type == spec.name
+                    }
+                    if spec.db_file in dirty_files:
+                        keys.update(
+                            record_key
+                            for entity_type, record_key in local
+                            if entity_type == spec.name
+                        )
+                        # Mapped records absent from the current table represent
+                        # local deletions and must be emitted as tombstones.
+                        keys.update(self.store.mapping_keys(spec.name))
+
+                ordered_keys = sorted(keys, key=_record_key_sort_key)
                 if spec.name == "rpg_items":
-                    # system_glowny_id is a real self-FK. Sort by dependency depth
-                    # instead of relying only on the semantic type label. Parents
-                    # are applied before children, while remote deletions remove
-                    # the deepest children first.
-                    key_set = set(keys)
+                    key_set = set(ordered_keys)
                     depth_cache: dict[str, int] = {}
 
                     def rpg_payload(record_key: str) -> dict[str, Any]:
@@ -726,7 +912,8 @@ class CloudService:
                             payload = remote_row.get("payload")
                             if isinstance(payload, dict):
                                 return payload
-                        return local.get((spec.name, record_key)) or {}
+                        payload = local.get((spec.name, record_key))
+                        return payload if isinstance(payload, dict) else {}
 
                     def rpg_depth(record_key: str, visiting: set[str] | None = None) -> int:
                         cached = depth_cache.get(record_key)
@@ -750,27 +937,56 @@ class CloudService:
                         remote_row = remote.get((spec.name, record_key)) or {}
                         remote_delete = bool(remote_row.get("deleted"))
                         depth = rpg_depth(record_key)
-                        return (1 if remote_delete else 0, -depth if remote_delete else depth, _record_key_sort_key(record_key))
-
-                    keys.sort(key=rpg_order)
-
-                for record_key in keys:
-                    local_payload = local.get((spec.name, record_key))
-                    remote_row = remote.get((spec.name, record_key))
-                    if self.store.has_open_conflict(spec.name, record_key):
-                        remote_deleted = bool(remote_row.get("deleted")) if remote_row else False
-                        remote_payload = dict(remote_row.get("payload") or {}) if remote_row and not remote_deleted else None
-                        remote_version = int(remote_row.get("version") or 0) if remote_row else 0
-                        self.store.record_conflict(
-                            spec.name, record_key, local_payload, remote_payload,
-                            local_payload is None, remote_deleted, remote_version,
+                        return (
+                            1 if remote_delete else 0,
+                            -depth if remote_delete else depth,
+                            _record_key_sort_key(record_key),
                         )
-                        report.conflicts += 1
-                        continue
-                    self._sync_record(client, session, spec, record_key, local_payload, remote_row, report)
+
+                    ordered_keys.sort(key=rpg_order)
+
+                for record_key in ordered_keys:
+                    entity_key = (spec.name, record_key)
+                    if entity_key not in local:
+                        local[entity_key] = self._local_record(spec, record_key)
+                    local_payload = local.get(entity_key)
+                    remote_row = remote.get(entity_key)
+                    had_conflict = self.store.has_open_conflict(spec.name, record_key)
+                    self._sync_record(
+                        client,
+                        session,
+                        spec,
+                        record_key,
+                        local_payload,
+                        remote_row,
+                        report,
+                        remote_complete=remote_complete,
+                    )
+                    if had_conflict:
+                        # 0.9.11 uses deterministic local-first conflict handling.
+                        # Old unresolved conflicts are closed once the local value
+                        # has been reconciled successfully.
+                        self.store.resolve_open_conflict(spec.name, record_key)
+
+            # Advance the remote cursor only to rows that were actually fetched.
+            # We intentionally do not advance it from our own uploads because a
+            # different device may have written between the fetch and the push.
+            # Keeping the older cursor makes the next pass re-read that overlap
+            # instead of risking a missed remote update.
+            fetched_timestamps = [
+                str(row.get("updated_at") or "")
+                for row in remote_rows
+                if str(row.get("updated_at") or "")
+            ]
+            if fetched_timestamps:
+                self.store.set_meta("remote_cursor_at", max(fetched_timestamps))
 
             self.store.set_meta("last_sync_at", str(int(time.time())))
             self.store.set_meta("last_sync_user", session.user_id)
+            self.store.set_meta("incremental_sync_ready", "1")
+            self._store_database_fingerprints()
+            self.store.clear_dirty_databases(dirty_snapshot)
+
             if self._active_sync_backup_extended and safety_backup is not None:
                 self.databases.prune_safety_backups("cloud-sync", keep=10)
             elif safety_backup is not None:
@@ -819,14 +1035,51 @@ class CloudService:
         local_payload: dict[str, Any] | None,
         remote_row: dict[str, Any] | None,
         report: SyncReport,
+        *,
+        remote_complete: bool = True,
     ) -> None:
         mapping = self.store.mapping(spec.name, record_key)
         local_hash = _payload_hash(local_payload) if local_payload is not None else DELETED_HASH
 
-        # Sesyjka represents deletions with explicit tombstones. A physically
-        # missing remote row is therefore not a deletion signal. Treating it as
-        # one could erase a complete local database after a partial backend
-        # response, manual backend cleanup or a transient server-side issue.
+        # During an incremental pass, absence from ``remote_rows`` means "not
+        # changed since the remote cursor", not "missing in the cloud". If the
+        # record already has a mapping, we can decide from the local hash alone.
+        if remote_row is None and not remote_complete:
+            if mapping is None:
+                remote_row = client.fetch_record(
+                    session.access_token, session.user_id, spec.name, record_key
+                )
+                return self._sync_record(
+                    client, session, spec, record_key, local_payload, remote_row, report,
+                    remote_complete=True,
+                )
+            last_local = str(mapping["last_local_hash"] or DELETED_HASH)
+            if local_hash == last_local:
+                report.unchanged += 1
+                return
+            version = int(mapping["remote_version"] or 0) + 1
+            pushed = self._push(
+                client,
+                session,
+                spec.name,
+                record_key,
+                local_payload,
+                local_payload is None,
+                version,
+            )
+            pushed_hash = _remote_hash(pushed)
+            pushed_version = int(pushed.get("version") or version)
+            self.store.set_mapping(spec.name, record_key, local_hash, pushed_hash, pushed_version)
+            if local_payload is None:
+                report.deleted_remote += 1
+            else:
+                report.uploaded += 1
+            return
+
+        # In a complete remote snapshot, a missing row is genuinely absent.
+        # Sesyjka uses explicit tombstones for deletions, so a physically missing
+        # remote row never causes deletion of local data. Local state is restored
+        # to the cloud instead.
         if remote_row is None:
             if local_payload is None:
                 if mapping is not None:
@@ -851,6 +1104,15 @@ class CloudService:
 
         if mapping is None:
             if local_payload is None:
+                # Re-check immediately before a cloud-only insert. A local row may
+                # have been created after the incremental snapshot was taken. In
+                # that race the newly committed SQLite value still has priority.
+                current_local = self._local_record(spec, record_key)
+                if current_local is not None:
+                    return self._sync_record(
+                        client, session, spec, record_key, current_local, remote_row, report,
+                        remote_complete=True,
+                    )
                 if remote_deleted:
                     self.store.set_mapping(spec.name, record_key, DELETED_HASH, DELETED_HASH, remote_version)
                     report.unchanged += 1
@@ -863,11 +1125,23 @@ class CloudService:
                 self.store.set_mapping(spec.name, record_key, local_hash, remote_hash, remote_version)
                 report.unchanged += 1
                 return
-            self.store.record_conflict(
-                spec.name, record_key, local_payload, remote_payload,
-                False, remote_deleted, remote_version,
+
+            # Local-first policy: when the same key exists independently on both
+            # sides, the local SQLite row is authoritative. This also resurrects
+            # a remotely deleted record when it still exists locally.
+            pushed = self._push(
+                client,
+                session,
+                spec.name,
+                record_key,
+                local_payload,
+                False,
+                max(1, remote_version + 1),
             )
-            report.conflicts += 1
+            pushed_hash = _remote_hash(pushed)
+            pushed_version = int(pushed.get("version") or max(1, remote_version + 1))
+            self.store.set_mapping(spec.name, record_key, local_hash, pushed_hash, pushed_version)
+            report.uploaded += 1
             return
 
         last_local = str(mapping["last_local_hash"] or DELETED_HASH)
@@ -878,18 +1152,9 @@ class CloudService:
         if not local_changed and not remote_changed:
             report.unchanged += 1
             return
-        if local_changed and remote_changed:
-            if local_hash == remote_hash:
-                self.store.set_mapping(spec.name, record_key, local_hash, remote_hash, remote_version)
-                report.unchanged += 1
-                return
-            self.store.record_conflict(
-                spec.name, record_key, local_payload, remote_payload,
-                local_payload is None, remote_deleted, remote_version,
-            )
-            report.conflicts += 1
-            return
         if local_changed:
+            # Local database has priority. If both sides changed, the local row
+            # wins deterministically instead of generating a blocking conflict.
             pushed = self._push(
                 client,
                 session,
@@ -908,7 +1173,16 @@ class CloudService:
                 report.uploaded += 1
             return
 
-        # Zmiana tylko w chmurze.
+        # Only the cloud changed according to the snapshot. Re-read SQLite just
+        # before applying the remote value so an edit committed while this sync
+        # was running cannot be overwritten by an older snapshot decision.
+        current_local = self._local_record(spec, record_key)
+        current_hash = _payload_hash(current_local) if current_local is not None else DELETED_HASH
+        if current_hash != local_hash:
+            return self._sync_record(
+                client, session, spec, record_key, current_local, remote_row, report,
+                remote_complete=True,
+            )
         self._apply_remote(spec, record_key, remote_payload, deleted=remote_deleted)
         self.store.set_mapping(spec.name, record_key, remote_hash, remote_hash, remote_version)
         if remote_deleted:
@@ -937,9 +1211,14 @@ class CloudService:
             device_id=self.store.device_id,
         )
 
-    def _local_snapshot(self) -> dict[tuple[str, str], dict[str, Any]]:
+    def _local_snapshot(
+        self,
+        db_files: set[str] | None = None,
+    ) -> dict[tuple[str, str], dict[str, Any]]:
         result: dict[tuple[str, str], dict[str, Any]] = {}
         for spec in ENTITY_SPECS:
+            if db_files is not None and spec.db_file not in db_files:
+                continue
             try:
                 with self.databases.connect(spec.db_file) as connection:
                     rows = connection.execute(f"SELECT * FROM {spec.table}").fetchall()
@@ -950,6 +1229,20 @@ class CloudService:
                 record_key = _record_key(spec, payload)
                 result[(spec.name, record_key)] = payload
         return result
+
+    def _local_record(self, spec: EntitySpec, record_key: str) -> dict[str, Any] | None:
+        key_values = _parse_record_key(spec, record_key)
+        where = " AND ".join(f"{column}=?" for column in spec.key_columns)
+        try:
+            with self.databases.connect(spec.db_file) as connection:
+                row = connection.execute(
+                    f"SELECT * FROM {spec.table} WHERE {where}", key_values
+                ).fetchone()
+        except FileNotFoundError:
+            return None
+        if row is None:
+            return None
+        return {key: row[key] for key in row.keys()}
 
     def _apply_remote(
         self,
@@ -962,29 +1255,33 @@ class CloudService:
         key_values = _parse_record_key(spec, record_key)
         self._ensure_sync_domain_backup()
         try:
-            with self.databases.connect(spec.db_file, write=True) as connection:
-                if deleted:
-                    where = " AND ".join(f"{column}=?" for column in spec.key_columns)
-                    connection.execute(f"DELETE FROM {spec.table} WHERE {where}", key_values)
-                    return
-                if payload is None:
-                    raise CloudError("Brak danych rekordu chmurowego.")
-                columns = {str(row[1]) for row in connection.execute(f"PRAGMA table_info({spec.table})")}
-                clean = {key: value for key, value in payload.items() if key in columns}
-                for column, value in zip(spec.key_columns, key_values):
-                    clean[column] = value
-                names = list(clean)
-                placeholders = ", ".join("?" for _ in names)
-                conflict = ", ".join(spec.key_columns)
-                updates = ", ".join(f"{name}=excluded.{name}" for name in names if name not in spec.key_columns)
-                if updates:
-                    sql = (
-                        f"INSERT INTO {spec.table} ({', '.join(names)}) VALUES ({placeholders}) "
-                        f"ON CONFLICT({conflict}) DO UPDATE SET {updates}"
-                    )
-                else:
-                    sql = f"INSERT OR IGNORE INTO {spec.table} ({', '.join(names)}) VALUES ({placeholders})"
-                connection.execute(sql, tuple(clean[name] for name in names))
+            self._suppress_local_tracking += 1
+            try:
+                with self.databases.connect(spec.db_file, write=True) as connection:
+                    if deleted:
+                        where = " AND ".join(f"{column}=?" for column in spec.key_columns)
+                        connection.execute(f"DELETE FROM {spec.table} WHERE {where}", key_values)
+                        return
+                    if payload is None:
+                        raise CloudError("Brak danych rekordu chmurowego.")
+                    columns = {str(row[1]) for row in connection.execute(f"PRAGMA table_info({spec.table})")}
+                    clean = {key: value for key, value in payload.items() if key in columns}
+                    for column, value in zip(spec.key_columns, key_values):
+                        clean[column] = value
+                    names = list(clean)
+                    placeholders = ", ".join("?" for _ in names)
+                    conflict = ", ".join(spec.key_columns)
+                    updates = ", ".join(f"{name}=excluded.{name}" for name in names if name not in spec.key_columns)
+                    if updates:
+                        sql = (
+                            f"INSERT INTO {spec.table} ({', '.join(names)}) VALUES ({placeholders}) "
+                            f"ON CONFLICT({conflict}) DO UPDATE SET {updates}"
+                        )
+                    else:
+                        sql = f"INSERT OR IGNORE INTO {spec.table} ({', '.join(names)}) VALUES ({placeholders})"
+                    connection.execute(sql, tuple(clean[name] for name in names))
+            finally:
+                self._suppress_local_tracking -= 1
         except sqlite3.IntegrityError as exc:
             raise CloudError(
                 f"Nie można zastosować rekordu {spec.name}/{record_key} z chmury: {exc}"

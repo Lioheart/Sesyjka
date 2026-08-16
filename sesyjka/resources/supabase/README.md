@@ -1,4 +1,4 @@
-# Sesyjka Cloud 0.9.10 - konfiguracja Supabase i Discord
+# Sesyjka Cloud 0.9.11 - konfiguracja Supabase i Discord
 
 Konfigurację wykonuje administrator projektu Sesyjka tylko raz. Użytkownik końcowy loguje się przyciskiem `Zaloguj przez Discord` i nie wykonuje żadnego SQL ani nie konfiguruje Discord Developer Portal.
 
@@ -79,7 +79,7 @@ NOTIFY pgrst, 'reload schema';
 
 ## 6. Konfiguracja klienta
 
-Produkcja 0.9.10 ma zapisane w aplikacji:
+Produkcja 0.9.11 ma zapisane w aplikacji:
 
 ```text
 SUPABASE_URL=https://rjevhlnscdodgoaztxao.supabase.co
@@ -118,6 +118,6 @@ wydawcy.db
 planszowe.db
 ```
 
-Dodatkowy `sync.db` przechowuje tylko stan synchronizacji i konflikty. Brak Internetu nie blokuje CRUD. Gdy sieć wróci, automatyczna synchronizacja ponownie wysyła lokalne zmiany.
+Dodatkowy `sync.db` przechowuje stan synchronizacji, kolejkę lokalnie zmienionych baz, kursor `updated_at` i zgodność ze starszymi konfliktami. Brak Internetu nie blokuje CRUD. Lokalna edycja nie wywołuje synchronizacji natychmiast. Zostaje wysłana przy następnym okresowym przebiegu lub po użyciu `Synchronizuj teraz`. Kolejne przebiegi pobierają z Supabase tylko rekordy zmienione od zapisanego kursora. Przy jednoczesnej zmianie tego samego rekordu pierwszeństwo ma lokalna baza SQLite.
 
 Token odświeżania jest przechowywany w `${XDG_CONFIG_HOME:-~/.config}/sesyjka/cloud-session.json` z prawami `0600`. Hasło Discord nigdy nie trafia do aplikacji.

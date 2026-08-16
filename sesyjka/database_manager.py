@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import shutil
 import sqlite3
 import tempfile
@@ -7,9 +8,12 @@ import zipfile
 from contextlib import closing, contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterator, Sequence
+from typing import Any, Callable, Iterator, Sequence
 
 from .config import CORE_DB_FILES, DB_FILES, data_dir
+
+
+LOG = logging.getLogger(__name__)
 
 
 class ReadOnlyDatabaseError(PermissionError):
@@ -130,6 +134,7 @@ class DatabaseManager:
         self._own_root.mkdir(parents=True, exist_ok=True)
         self._guest_root: Path | None = None
         self.last_schema_backup: Path | None = None
+        self._write_listeners: list[Callable[[str], None]] = []
 
     @property
     def own_root(self) -> Path:
@@ -160,6 +165,33 @@ class DatabaseManager:
             raise ValueError(f"Nieznana baza danych: {filename}")
         return (self._own_root if own else self.active_root) / filename
 
+    def add_write_listener(self, callback: Callable[[str], None]) -> None:
+        """Register a listener notified after a committed local database write.
+
+        The listener receives the database filename. It is intentionally outside
+        the SQLite transaction, so synchronization bookkeeping can live in
+        ``sync.db`` without coupling the domain database schemas to cloud sync.
+        """
+        if callback not in self._write_listeners:
+            self._write_listeners.append(callback)
+
+    def remove_write_listener(self, callback: Callable[[str], None]) -> None:
+        try:
+            self._write_listeners.remove(callback)
+        except ValueError:
+            pass
+
+    def _notify_write(self, filename: str) -> None:
+        for callback in tuple(self._write_listeners):
+            try:
+                callback(filename)
+            except Exception:
+                # The domain transaction is already committed. A bookkeeping
+                # failure must not be reported as a failed user save. Cloud sync
+                # also compares file fingerprints before the next pass, so the
+                # change will be rediscovered even if this notification fails.
+                LOG.exception("Nie udało się oznaczyć zmiany bazy %s", filename)
+
     @contextmanager
     def connect(self, filename: str, write: bool = False) -> Iterator[sqlite3.Connection]:
         if write and self.guest_mode:
@@ -173,16 +205,21 @@ class DatabaseManager:
             connection = sqlite3.connect(path)
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys = ON")
+        changes_before = connection.total_changes
+        committed_change = False
         try:
             yield connection
             if write:
                 connection.commit()
+                committed_change = connection.total_changes > changes_before
         except Exception:
             if write:
                 connection.rollback()
             raise
         finally:
             connection.close()
+        if write and committed_change:
+            self._notify_write(filename)
 
     def initialize(self) -> None:
         self.last_schema_backup = self._backup_before_schema_update()

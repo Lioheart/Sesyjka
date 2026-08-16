@@ -194,7 +194,6 @@ class SesyjkaWindow(Adw.ApplicationWindow):
         self.style_manager = Adw.StyleManager.get_default()
         self._update_check_in_progress = False
         self._cloud_sync_in_progress = False
-        self._cloud_debounce_source: int | None = None
         self._cloud_last_error = ""
         self._cloud_last_error_kind = ""
         self._cloud_last_attempt = 0
@@ -407,7 +406,8 @@ class SesyjkaWindow(Adw.ApplicationWindow):
             page = self.pages[key]
             if page is not visible:
                 page.refresh()
-        self._schedule_cloud_sync_after_local_change()
+        if hasattr(self, "cloud_status_label"):
+            self._update_cloud_status()
 
     def update_guest_state(self) -> None:
         guest = self.databases.guest_mode
@@ -460,7 +460,7 @@ class SesyjkaWindow(Adw.ApplicationWindow):
             value = int(self.settings_data.get("cloud_sync_interval", DEFAULT_SYNC_INTERVAL))
         except (TypeError, ValueError):
             value = DEFAULT_SYNC_INTERVAL
-        return min(3600, max(60, value))
+        return min(86400, max(60, value))
 
     def _set_cloud_status(self, text: str, state: str = "neutral") -> None:
         self.cloud_status_label.set_text(text)
@@ -502,6 +502,14 @@ class SesyjkaWindow(Adw.ApplicationWindow):
                 self._set_cloud_status("Cloud: błąd", "error")
             self.cloud_button.set_tooltip_text(self._cloud_last_error)
             return
+        pending = self.cloud.pending_local_databases
+        if pending:
+            self._set_cloud_status("Cloud: oczekuje", "ok")
+            minutes = max(1, self._cloud_interval() // 60)
+            self.cloud_button.set_tooltip_text(
+                f"Zmiany zapisano lokalnie. Synchronizacja okresowa co {minutes} min lub ręcznie."
+            )
+            return
         last_sync = int(self.cloud.store.get_meta("last_sync_at") or 0)
         if last_sync:
             timestamp = time.strftime("%H:%M", time.localtime(last_sync))
@@ -512,8 +520,21 @@ class SesyjkaWindow(Adw.ApplicationWindow):
             self._set_cloud_status("Cloud: gotowa", "ok")
             self.cloud_button.set_tooltip_text("Konto połączone. Dane oczekują na pierwszą synchronizację.")
 
+    def _cloud_sync_due(self) -> bool:
+        last_sync = int(self.cloud.store.get_meta("last_sync_at") or 0)
+        reference = max(last_sync, self._cloud_last_attempt)
+        if reference <= 0:
+            return True
+        return int(time.time()) - reference >= self._cloud_interval()
+
     def _startup_cloud_sync(self) -> bool:
-        if self._cloud_configured() and self.cloud.signed_in and self._cloud_auto_enabled() and not self.databases.guest_mode:
+        if (
+            self._cloud_configured()
+            and self.cloud.signed_in
+            and self._cloud_auto_enabled()
+            and not self.databases.guest_mode
+            and self._cloud_sync_due()
+        ):
             self.trigger_cloud_sync(manual=False)
         else:
             self._update_cloud_status()
@@ -527,29 +548,10 @@ class SesyjkaWindow(Adw.ApplicationWindow):
             and self._cloud_auto_enabled()
             and not self.databases.guest_mode
             and not self._cloud_sync_in_progress
+            and self._cloud_sync_due()
         ):
-            last_sync = int(self.cloud.store.get_meta("last_sync_at") or 0)
-            reference = max(last_sync, self._cloud_last_attempt)
-            if int(time.time()) - reference >= self._cloud_interval():
-                self.trigger_cloud_sync(manual=False)
+            self.trigger_cloud_sync(manual=False)
         return True
-
-    def _schedule_cloud_sync_after_local_change(self) -> None:
-        if not (
-            self._cloud_configured()
-            and self.cloud.signed_in
-            and self._cloud_auto_enabled()
-            and not self.databases.guest_mode
-        ):
-            return
-        if self._cloud_debounce_source is not None:
-            GLib.source_remove(self._cloud_debounce_source)
-        self._cloud_debounce_source = GLib.timeout_add_seconds(5, self._run_debounced_cloud_sync)
-
-    def _run_debounced_cloud_sync(self) -> bool:
-        self._cloud_debounce_source = None
-        self.trigger_cloud_sync(manual=False)
-        return False
 
     def trigger_cloud_sync(self, manual: bool = False) -> None:
         if self.databases.guest_mode:
@@ -624,8 +626,9 @@ class SesyjkaWindow(Adw.ApplicationWindow):
         description = Gtk.Label(
             label=(
                 "Sesyjka Cloud używa konta Discord do logowania przez Supabase Auth. "
-                "Program pozostaje w pełni użyteczny bez Internetu, a sync.db przechowuje "
-                "wyłącznie stan synchronizacji i konflikty."
+                "Program zapisuje dane najpierw w lokalnych bazach SQLite. sync.db przechowuje "
+                "wyłącznie stan synchronizacji, kolejkę zmian i konflikty. Automatyczna "
+                "synchronizacja działa okresowo, nie po każdej edycji."
             ),
             wrap=True,
             xalign=0.0,
@@ -713,16 +716,27 @@ class SesyjkaWindow(Adw.ApplicationWindow):
             last_text = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(last_sync)) if last_sync else "jeszcze nie wykonano"
             account_box.append(Gtk.Label(label=f"Ostatnia synchronizacja: {last_text}", xalign=0.0))
 
-            auto_sync = Gtk.CheckButton(label="Automatycznie synchronizuj po zmianach i okresowo")
+            auto_sync = Gtk.CheckButton(label="Automatycznie synchronizuj okresowo")
             auto_sync.set_active(self._cloud_auto_enabled())
             account_box.append(auto_sync)
             interval_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
             interval_box.append(Gtk.Label(label="Interwał synchronizacji:"))
-            interval = Gtk.SpinButton.new_with_range(1, 60, 1)
+            interval = Gtk.SpinButton.new_with_range(1, 1440, 1)
             interval.set_value(self._cloud_interval() / 60)
             interval_box.append(interval)
             interval_box.append(Gtk.Label(label="min"))
             account_box.append(interval_box)
+            sync_policy = Gtk.Label(
+                label=(
+                    "Zmiany są zapisywane lokalnie natychmiast i oczekują do kolejnego interwału. "
+                    "Synchronizacja przesyła tylko zmienione rekordy. Jeśli ten sam rekord zmieniono "
+                    "lokalnie i w chmurze, pierwszeństwo ma lokalna baza danych."
+                ),
+                wrap=True,
+                xalign=0.0,
+            )
+            sync_policy.add_css_class("dim-label")
+            account_box.append(sync_policy)
 
             def update_sync_preferences(*_args: object) -> None:
                 self.settings_data["cloud_auto_sync"] = auto_sync.get_active()
@@ -1088,8 +1102,10 @@ class SesyjkaWindow(Adw.ApplicationWindow):
             "Dwuklik edytuje rekord, a prawy przycisk myszy otwiera menu kontekstowe.\n\n"
             "SESYJKA CLOUD\n"
             "Przycisk Cloud w nagłówku otwiera logowanie przez Discord, ręczną synchronizację i konflikty. Backend Sesyjka Cloud jest skonfigurowany w aplikacji. "
-            "Dane są nadal zapisywane najpierw lokalnie, więc brak Internetu nie blokuje pracy. Automatyczna synchronizacja "
-            "uruchamia się po zmianach i okresowo. Stan mapowań jest przechowywany w osobnej bazie sync.db.\n\n"
+            "Dane są zapisywane najpierw lokalnie, więc brak Internetu nie blokuje pracy. Automatyczna synchronizacja "
+            "uruchamia się wyłącznie okresowo lub ręcznie. sync.db zapamiętuje, które lokalne bazy zostały zmienione, "
+            "a z Supabase pobierane są tylko rekordy zmienione od poprzedniej synchronizacji. Przy jednoczesnej zmianie "
+            "tego samego rekordu pierwszeństwo ma lokalna baza danych.\n\n"
             "AKTUALIZACJE\n"
             "Program sprawdza najnowsze wydanie GitHub podczas uruchamiania, nie częściej niż co 6 godzin. "
             "Przycisk aktualizacji w nagłówku uruchamia kontrolę ręczną. Pakiety DEB, RPM i instalacja ogólna "
@@ -1110,6 +1126,8 @@ class SesyjkaWindow(Adw.ApplicationWindow):
     def show_history(self) -> None:
         dialog = ModalWindow(self, "Historia zmian", width=720, height=620)
         history_text = (
+            "0.9.11\n"
+            "Zmieniono Sesyjka Cloud na synchronizację okresową. Edycje nie wywołują już synchronizacji po kilku sekundach. sync.db śledzi lokalnie zmienione bazy, a kolejne przebiegi skanują tylko te bazy i pobierają z Supabase wyłącznie rekordy zmienione od poprzedniego kursora. Przy kolizji zmian lokalna baza ma pierwszeństwo. Dodano wykrywanie zmian wykonanych w plikach SQLite poza uruchomioną aplikacją.\n\n"
             "0.9.10\n"
             "Naprawiono bezpieczeństwo Sesyjka Cloud. Błąd synchronizacji nie pozostawia już częściowo zmienionych lokalnych baz, ponieważ zmiany z chmury są chronione kopią i automatycznym rollbackiem. Brak wiersza w Supabase nie jest traktowany jako usunięcie bez tombstone. Dodano też odzyskiwanie pustej bazy wydawców z zgodnej kopii zapasowej, gdy kolekcja nadal zawiera odwołania do wydawców.\n\n"
             "0.9.9\n"

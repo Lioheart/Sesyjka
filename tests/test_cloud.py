@@ -8,7 +8,13 @@ import unittest
 from pathlib import Path
 from typing import Any
 
-from sesyjka.cloud import CloudService, CloudSession, SessionTokenStore
+from sesyjka.cloud import (
+    CloudConfig,
+    CloudService,
+    CloudSession,
+    SessionTokenStore,
+    SupabaseHttpClient,
+)
 from sesyjka.database_manager import DatabaseManager
 from sesyjka.repository import Repository
 
@@ -16,9 +22,30 @@ from sesyjka.repository import Repository
 class FakeSupabaseClient:
     def __init__(self) -> None:
         self.records: dict[tuple[str, str], dict[str, Any]] = {}
+        self.fetch_since_calls: list[str | None] = []
+        self.upsert_calls: list[tuple[str, str]] = []
+        self._clock = 0
 
-    def fetch_records(self, token: str, user_id: str) -> list[dict[str, Any]]:
-        return [dict(row) for row in self.records.values() if row["owner_id"] == user_id]
+    def _next_timestamp(self) -> str:
+        self._clock += 1
+        return f"2026-08-15T00:00:{self._clock:02d}Z"
+
+    def fetch_records(
+        self, token: str, user_id: str, updated_since: str | None = None
+    ) -> list[dict[str, Any]]:
+        self.fetch_since_calls.append(updated_since)
+        rows = [dict(row) for row in self.records.values() if row["owner_id"] == user_id]
+        if updated_since:
+            rows = [row for row in rows if str(row.get("updated_at") or "") >= updated_since]
+        return rows
+
+    def fetch_record(
+        self, token: str, user_id: str, entity_type: str, record_key: str
+    ) -> dict[str, Any] | None:
+        row = self.records.get((entity_type, record_key))
+        if row is None or row["owner_id"] != user_id:
+            return None
+        return dict(row)
 
     def upsert_record(
         self,
@@ -40,10 +67,11 @@ class FakeSupabaseClient:
             "payload": dict(payload or {}),
             "version": int(version),
             "deleted": bool(deleted),
-            "updated_at": "2026-08-15T00:00:00Z",
+            "updated_at": self._next_timestamp(),
             "device_id": device_id,
         }
         self.records[(entity_type, record_key)] = row
+        self.upsert_calls.append((entity_type, record_key))
         return dict(row)
 
 
@@ -149,33 +177,45 @@ class CloudSyncTests(unittest.TestCase):
         rows = [row for row in self.repo.publishers() if int(row["id"]) == 42]
         self.assertEqual(rows[0]["nazwa"], "Cloud Publisher")
 
-    def test_conflict_is_created_when_both_sides_changed(self) -> None:
+    def test_local_database_wins_when_both_sides_changed(self) -> None:
         publisher_id = self.repo.save_publisher({"nazwa": "Start", "kraj": "PL", "strona": ""})
         self.cloud.sync(self.url, self.key)
         self.repo.save_publisher({"nazwa": "Lokalna", "kraj": "PL", "strona": ""}, publisher_id)
         row = self.fake.records[("publishers", str(publisher_id))]
         row["payload"] = {**row["payload"], "nazwa": "Chmurowa"}
         row["version"] = 2
+        row["updated_at"] = "2026-08-15T00:00:59Z"
         report = self.cloud.sync(self.url, self.key)
-        self.assertEqual(report.conflicts, 1)
-        conflicts = self.cloud.conflicts
-        self.assertEqual(len(conflicts), 1)
-        self.assertEqual(conflicts[0].local_payload["nazwa"], "Lokalna")
-        self.assertEqual(conflicts[0].remote_payload["nazwa"], "Chmurowa")
+        self.assertGreaterEqual(report.uploaded, 1)
+        self.assertEqual(report.conflicts, 0)
+        self.assertEqual(self.cloud.conflicts, [])
+        self.assertEqual(
+            self.fake.records[("publishers", str(publisher_id))]["payload"]["nazwa"],
+            "Lokalna",
+        )
+        current = [row for row in self.repo.publishers() if int(row["id"]) == publisher_id][0]
+        self.assertEqual(current["nazwa"], "Lokalna")
 
-    def test_remote_conflict_resolution_updates_local_record(self) -> None:
+    def test_existing_conflict_is_closed_with_local_priority(self) -> None:
         publisher_id = self.repo.save_publisher({"nazwa": "Start", "kraj": "PL", "strona": ""})
         self.cloud.sync(self.url, self.key)
         self.repo.save_publisher({"nazwa": "Lokalna", "kraj": "PL", "strona": ""}, publisher_id)
         row = self.fake.records[("publishers", str(publisher_id))]
         row["payload"] = {**row["payload"], "nazwa": "Chmurowa"}
         row["version"] = 2
+        row["updated_at"] = "2026-08-15T00:00:59Z"
+        self.cloud.store.record_conflict(
+            "publishers", str(publisher_id),
+            {"id": publisher_id, "nazwa": "Lokalna"},
+            {"id": publisher_id, "nazwa": "Chmurowa"},
+            False, False, 2,
+        )
         self.cloud.sync(self.url, self.key)
-        conflict = self.cloud.conflicts[0]
-        self.cloud.resolve_conflict(self.url, self.key, conflict.id, "remote")
-        current = [row for row in self.repo.publishers() if int(row["id"]) == publisher_id][0]
-        self.assertEqual(current["nazwa"], "Chmurowa")
         self.assertEqual(self.cloud.conflicts, [])
+        self.assertEqual(
+            self.fake.records[("publishers", str(publisher_id))]["payload"]["nazwa"],
+            "Lokalna",
+        )
 
     def test_local_deletion_is_uploaded_as_tombstone(self) -> None:
         publisher_id = self.repo.save_publisher({"nazwa": "Do usunięcia", "kraj": "PL", "strona": ""})
@@ -226,12 +266,21 @@ class CloudSyncTests(unittest.TestCase):
         self.cloud.sync(self.url, self.key)
         del self.fake.records[("publishers", str(publisher_id))]
 
-        report = self.cloud.sync(self.url, self.key)
-
-        self.assertGreaterEqual(report.uploaded, 1)
+        self.cloud.sync(self.url, self.key)
         self.assertEqual(self.repo.publishers()[0]["nazwa"], "Local Safe")
+
+        # A later local edit marks the database dirty and recreates a backend row
+        # that was physically removed without the supported tombstone mechanism.
+        self.repo.save_publisher(
+            {"nazwa": "Local Safe 2", "kraj": "PL", "strona": ""}, publisher_id
+        )
+        report = self.cloud.sync(self.url, self.key)
+        self.assertGreaterEqual(report.uploaded, 1)
         self.assertIn(("publishers", str(publisher_id)), self.fake.records)
-        self.assertFalse(self.fake.records[("publishers", str(publisher_id))]["deleted"])
+        self.assertEqual(
+            self.fake.records[("publishers", str(publisher_id))]["payload"]["nazwa"],
+            "Local Safe 2",
+        )
 
     def test_failed_remote_apply_rolls_back_publishers_and_sync_state(self) -> None:
         publisher_id = self.repo.save_publisher({"nazwa": "Do ochrony", "kraj": "PL", "strona": ""})
@@ -274,6 +323,84 @@ class CloudSyncTests(unittest.TestCase):
         self.assertEqual(str(restored_mapping["last_remote_hash"]), before_remote_hash)
 
 
+    def test_local_writes_are_queued_without_running_sync(self) -> None:
+        self.assertEqual(self.cloud.pending_local_databases, ())
+        self.repo.save_publisher({"nazwa": "Queued", "kraj": "PL", "strona": ""})
+        self.assertIn("wydawcy.db", self.cloud.pending_local_databases)
+        self.assertEqual(self.fake.fetch_since_calls, [])
+        self.assertEqual(self.fake.upsert_calls, [])
+
+    def test_incremental_sync_uses_remote_cursor_and_uploads_only_changed_record(self) -> None:
+        first_id = self.repo.save_publisher({"nazwa": "One", "kraj": "PL", "strona": ""})
+        second_id = self.repo.save_publisher({"nazwa": "Two", "kraj": "PL", "strona": ""})
+        self.cloud.sync(self.url, self.key)
+        # The first local-only pass cannot establish a safe remote cursor from its
+        # own writes, so the next pass performs one complete remote read.
+        self.cloud.sync(self.url, self.key)
+        self.assertIsNotNone(self.cloud.store.get_meta("remote_cursor_at"))
+
+        self.fake.upsert_calls.clear()
+        self.repo.save_publisher({"nazwa": "One changed", "kraj": "PL", "strona": ""}, first_id)
+        report = self.cloud.sync(self.url, self.key)
+
+        self.assertIsNotNone(self.fake.fetch_since_calls[-1])
+        self.assertIn(("publishers", str(first_id)), self.fake.upsert_calls)
+        self.assertNotIn(("publishers", str(second_id)), self.fake.upsert_calls)
+        self.assertEqual(report.uploaded, 1)
+
+    def test_incremental_sync_scans_only_locally_changed_database(self) -> None:
+        publisher_id = self.repo.save_publisher({"nazwa": "One", "kraj": "PL", "strona": ""})
+        self.cloud.sync(self.url, self.key)
+        self.cloud.sync(self.url, self.key)
+
+        captured: list[set[str] | None] = []
+        original = self.cloud._local_snapshot
+
+        def wrapped(db_files: set[str] | None = None):
+            captured.append(None if db_files is None else set(db_files))
+            return original(db_files)
+
+        self.cloud._local_snapshot = wrapped  # type: ignore[method-assign]
+        self.repo.save_publisher({"nazwa": "Changed", "kraj": "PL", "strona": ""}, publisher_id)
+        self.cloud.sync(self.url, self.key)
+        self.assertIn({"wydawcy.db"}, captured)
+        self.assertNotIn(None, captured)
+
+    def test_external_sqlite_edit_is_detected_by_fingerprint(self) -> None:
+        publisher_id = self.repo.save_publisher({"nazwa": "Before", "kraj": "PL", "strona": ""})
+        self.cloud.sync(self.url, self.key)
+        self.cloud.sync(self.url, self.key)
+        self.assertEqual(self.cloud.pending_local_databases, ())
+
+        import sqlite3
+        with sqlite3.connect(self.db.own_root / "wydawcy.db") as connection:
+            connection.execute("UPDATE wydawcy SET nazwa='External' WHERE id=?", (publisher_id,))
+            connection.commit()
+
+        self.fake.upsert_calls.clear()
+        report = self.cloud.sync(self.url, self.key)
+        self.assertEqual(report.uploaded, 1)
+        self.assertIn(("publishers", str(publisher_id)), self.fake.upsert_calls)
+        self.assertEqual(
+            self.fake.records[("publishers", str(publisher_id))]["payload"]["nazwa"],
+            "External",
+        )
+
+    def test_remote_apply_does_not_requeue_database_as_local_change(self) -> None:
+        self.fake.records[("publishers", "42")] = {
+            "id": "remote-42",
+            "owner_id": self.cloud.session.user_id,
+            "entity_type": "publishers",
+            "record_key": "42",
+            "payload": {"id": 42, "nazwa": "Remote only", "strona": "", "kraj": "PL"},
+            "version": 1,
+            "deleted": False,
+            "updated_at": "2026-08-15T00:00:10Z",
+            "device_id": "other",
+        }
+        self.cloud.sync(self.url, self.key)
+        self.assertEqual(self.cloud.pending_local_databases, ())
+
     def test_session_store_uses_owner_only_permissions(self) -> None:
         session = CloudSession("access", "refresh", 123, "uid", "u@example.com")
         self.token_store.save(session)
@@ -283,6 +410,61 @@ class CloudSyncTests(unittest.TestCase):
         self.assertEqual(loaded.email, "u@example.com")
         self.token_store.clear()
         self.assertFalse(self.token_store.path.exists())
+
+
+class SupabaseHttpClientTests(unittest.TestCase):
+    def test_fetch_records_paginates_complete_result_set(self) -> None:
+        client = SupabaseHttpClient(
+            CloudConfig("https://example.supabase.co", "sb_publishable_abcdefghijklmnopqrstuvwxyz")
+        )
+        rows = [
+            {
+                "id": f"row-{index}",
+                "owner_id": "user-1",
+                "entity_type": "publishers",
+                "record_key": str(index),
+                "payload": {"id": index},
+                "version": 1,
+                "deleted": False,
+                "updated_at": f"2026-08-15T00:{index // 60:02d}:{index % 60:02d}Z",
+                "device_id": "device",
+            }
+            for index in range(1200)
+        ]
+        ranges: list[str] = []
+        paths: list[str] = []
+
+        def fake_request(path: str, **kwargs: Any) -> list[dict[str, Any]]:
+            paths.append(path)
+            range_header = str((kwargs.get("headers") or {}).get("Range") or "")
+            ranges.append(range_header)
+            start_text, end_text = range_header.split("-", 1)
+            start, end = int(start_text), int(end_text)
+            return rows[start : end + 1]
+
+        client._request = fake_request  # type: ignore[method-assign]
+        result = client.fetch_records("token", "user-1")
+
+        self.assertEqual(len(result), 1200)
+        self.assertEqual(ranges, ["0-499", "500-999", "1000-1499"])
+        self.assertTrue(all("order=updated_at.asc%2Cid.asc" in path for path in paths))
+
+    def test_fetch_records_paginates_incremental_cursor_query(self) -> None:
+        client = SupabaseHttpClient(
+            CloudConfig("https://example.supabase.co", "sb_publishable_abcdefghijklmnopqrstuvwxyz")
+        )
+        paths: list[str] = []
+
+        def fake_request(path: str, **kwargs: Any) -> list[dict[str, Any]]:
+            paths.append(path)
+            return []
+
+        client._request = fake_request  # type: ignore[method-assign]
+        cursor = "2026-08-15T12:34:56+00:00"
+        self.assertEqual(client.fetch_records("token", "user-1", cursor), [])
+        self.assertEqual(len(paths), 1)
+        self.assertIn("updated_at=gte.2026-08-15T12%3A34%3A56%2B00%3A00", paths[0])
+
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-# Sesyjka GTK4 0.9.10
+# Sesyjka GTK4 0.9.11
 
 A native Linux application built with Python, GTK4 and Libadwaita. It manages tabletop RPG systems, books, supplements, sessions, players, publishers, board games and card games. The four original SQLite databases remain compatible, while board and card games use a separate fifth database.
 
@@ -6,15 +6,15 @@ Result repository: https://github.com/Lioheart/Sesyjka
 
 Original project and attribution: https://github.com/ZuraffPL/sesyjka
 
-## Sesyjka Cloud 0.9.10
+## Sesyjka Cloud 0.9.11
 
-Version 0.9.3 uses Discord OAuth for the optional offline-first cloud synchronization. Existing SQLite databases remain the local source of truth and keep their current schemas. A separate `sync.db` stores synchronization mappings, device state and unresolved conflicts.
+Version 0.9.11 uses Discord OAuth for the optional offline-first cloud synchronization. Existing SQLite databases remain the local source of truth and keep their current schemas. A separate `sync.db` stores synchronization mappings, device state and unresolved conflicts.
 
 The cloud backend uses Supabase Auth and the Supabase Data REST API. The production Project URL and publishable key are bundled with the application, so end users only need to choose Discord login. Run `supabase/schema.sql` once on the production backend. Never use a secret/service-role key in the desktop client.
 
-The application signs users in through Discord OAuth in the default browser, refreshes the resulting Supabase session, synchronizes manually or automatically, continues working offline, and explicitly resolves records that changed both locally and remotely. The header shows the current cloud state and conflict count.
+The application signs users in through Discord OAuth in the default browser, refreshes the resulting Supabase session, and synchronizes manually or on a configurable periodic interval. A local edit never starts network synchronization immediately. It is committed to SQLite first and queued in `sync.db`. Subsequent passes scan only locally changed databases and request remote rows from the stored `updated_at` cursor. If the same record changed on both sides, the current local SQLite row wins. Legacy unresolved conflicts remain visible for compatibility.
 
-See `supabase/README.md` for setup instructions. Discord passwords never reach Sesyjka. Authentication takes place in the default browser using OAuth PKCE. The refresh token is stored in the user configuration directory with file mode `0600`, but version 0.9.10 does not encrypt that file itself.
+See `supabase/README.md` for setup instructions. Discord passwords never reach Sesyjka. Authentication takes place in the default browser using OAuth PKCE. The refresh token is stored in the user configuration directory with file mode `0600`, but version 0.9.11 does not encrypt that file itself.
 
 
 ## Digital resources in 0.9.4
@@ -23,6 +23,14 @@ Version 0.9.4 adds a separate `zasoby.db` library for PDFs, VTT content and web 
 
 The PDF scanner recursively indexes files, calculates SHA-256 and only auto-links a file to an RPG item at high confidence. The DriveThruRPG integration is experimental: an Application Key with My Library Access can import purchase/file metadata and product links without automatically downloading large PDFs. The key stays local with mode `0600`.
 
+## Changes in 0.9.11
+
+- automatic cloud synchronization is periodic rather than triggered after each local edit
+- `sync.db` records which local databases are dirty, while file fingerprints detect edits made while Sesyjka was closed
+- remote synchronization uses an `updated_at` cursor and unchanged local records are not uploaded again
+- Supabase reads are paginated so full synchronization and large remote deltas are not limited to the first result page
+- when both sides changed the same record, the local SQLite value wins deterministically
+- new installations default to a 15 minute interval, configurable from 1 minute to 24 hours
 ## Changes in 0.9.10
 
 - cloud synchronization now creates a coherent local safety snapshot before applying remote database changes and automatically restores local databases plus `sync.db` if a synchronization pass fails

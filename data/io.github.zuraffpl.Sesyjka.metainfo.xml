@@ -79,6 +79,12 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="0.9.11" date="2026-08-16">
+      <description>
+        <p>Cloud synchronization is now periodic and incremental. Local edits are queued without network activity, remote reads use an updated-at cursor, and the local SQLite record wins when both sides changed.</p>
+        <p xml:lang="pl">Synchronizacja chmurowa jest teraz okresowa i przyrostowa. Lokalne edycje trafiają do kolejki bez ruchu sieciowego, zmiany z chmury są pobierane od ostatniego kursora, a przy kolizji pierwszeństwo ma lokalny rekord SQLite.</p>
+      </description>
+    </release>
     <release version="0.9.10" date="2026-08-15">
       <description>
         <p>Cloud synchronization now rolls back local databases on failed remote applies and no longer treats a missing backend row as a deletion.</p>
