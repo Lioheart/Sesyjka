@@ -9,7 +9,7 @@ from gi.repository import Gtk
 
 from ..dialogs import info
 from ..repository import Repository
-from ..widgets import DataTable, QuantityBarChart
+from ..widgets import DataTable, PieChartWidget
 
 
 class StatisticsPage(Gtk.Box):
@@ -37,19 +37,37 @@ class StatisticsPage(Gtk.Box):
         top.append(refresh)
         self.append(top)
 
-        self.cards = Gtk.FlowBox()
-        self.cards.set_selection_mode(Gtk.SelectionMode.NONE)
-        self.cards.set_max_children_per_line(8)
-        self.cards.set_min_children_per_line(2)
-        self.cards.set_column_spacing(10)
-        self.cards.set_row_spacing(10)
-        self.append(self.cards)
+        self.content_stack = Gtk.Stack()
+        self.content_stack.set_hexpand(True)
+        self.content_stack.set_vexpand(True)
+        self.content_stack.set_transition_type(Gtk.StackTransitionType.SLIDE_LEFT_RIGHT)
 
-        vertical = Gtk.Paned.new(Gtk.Orientation.VERTICAL)
-        vertical.set_vexpand(True)
+        switcher = Gtk.StackSwitcher()
+        switcher.set_stack(self.content_stack)
+        switcher.set_halign(Gtk.Align.CENTER)
+        switcher.add_css_class("statistics-subtabs")
+        self.append(switcher)
 
-        summary_tables = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        summary_tables.set_size_request(-1, 230)
+        charts_page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        charts_page.set_hexpand(True)
+        charts_page.set_vexpand(True)
+
+        # Dziewięć kafelków ma pozostać w jednym rzędzie. Gtk.Box daje tu
+        # przewidywalniejszy układ niż FlowBox, który wcześniej wymuszał
+        # zawinięcie dziewiątego kafelka do drugiego wiersza.
+        self.cards = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        self.cards.set_hexpand(True)
+        charts_page.append(self.cards)
+
+        self.chart = PieChartWidget()
+        self.chart.set_vexpand(True)
+        charts_page.append(self.chart)
+        self.content_stack.add_titled(charts_page, "charts", "Wykresy")
+
+        tables_page = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        tables_page.set_hexpand(True)
+        tables_page.set_vexpand(True)
+
         systems_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         systems_box.set_hexpand(True)
         systems_box.set_vexpand(True)
@@ -75,24 +93,15 @@ class StatisticsPage(Gtk.Box):
             enable_filters=False,
         )
         players_box.append(self.players_table)
+
         table_separator = Gtk.Separator(orientation=Gtk.Orientation.VERTICAL)
         table_separator.add_css_class("statistics-table-separator")
-        summary_tables.append(systems_box)
-        summary_tables.append(table_separator)
-        summary_tables.append(players_box)
-        vertical.set_start_child(summary_tables)
+        tables_page.append(systems_box)
+        tables_page.append(table_separator)
+        tables_page.append(players_box)
+        self.content_stack.add_titled(tables_page, "tables", "Sesje i gracze")
 
-        chart_section = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        separator = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
-        separator.add_css_class("statistics-section-separator")
-        separator.set_tooltip_text("Rozdzielacz zestawień i wykresu")
-        chart_section.append(separator)
-
-        self.chart = QuantityBarChart()
-        chart_section.append(self.chart)
-        vertical.set_end_child(chart_section)
-        vertical.set_position(280)
-        self.append(vertical)
+        self.append(self.content_stack)
 
     def set_read_only(self, _value: bool) -> None:
         return
@@ -108,8 +117,10 @@ class StatisticsPage(Gtk.Box):
     def _build_card(self, label: str, value: Any, *, clickable: bool = True) -> Gtk.Button:
         button = Gtk.Button()
         button.add_css_class("stat-card-button")
+        button.set_hexpand(True)
         content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         content.add_css_class("stat-card")
+        content.set_hexpand(True)
         number_text = str(value)
         number = Gtk.Label(label=number_text)
         number.set_wrap(True)
@@ -117,15 +128,16 @@ class StatisticsPage(Gtk.Box):
         number.set_max_width_chars(22)
         number.add_css_class("title-2" if len(number_text) > 12 else "title-1")
         caption = Gtk.Label(label=label)
+        caption.set_wrap(True)
+        caption.set_justify(Gtk.Justification.CENTER)
         caption.add_css_class("dim-label")
         content.append(number)
         content.append(caption)
         button.set_child(content)
         if clickable:
-            button.set_tooltip_text(f"Pokaż wykres ilości: {label}")
+            button.set_tooltip_text(f"Pokaż wykres kołowy: {label}")
             button.connect("clicked", lambda _button, selected=label: self.show_chart(selected))
         else:
-            button.set_tooltip_text("Łączna cena zakupu wszystkich pozycji RPG, planszówek i karcianek, osobno dla każdej waluty")
             button.set_can_focus(False)
         return button
 
@@ -141,7 +153,13 @@ class StatisticsPage(Gtk.Box):
             else:
                 button.remove_css_class("suggested-action")
 
-        self.chart.set_data(str(chart["title"]), list(chart["items"]))
+        self.chart.set_data(
+            str(chart["title"]),
+            list(chart["items"]),
+            value_suffix=str(chart.get("unit") or ""),
+            decimals=int(chart.get("decimals", 0) or 0),
+            summary_note=str(chart.get("note") or ""),
+        )
 
     def refresh(self) -> None:
         try:

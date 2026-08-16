@@ -1,4 +1,4 @@
-# Sesyjka GTK4 0.9.13
+# Sesyjka GTK4 0.9.17
 
 Natywna aplikacja dla Linuksa zbudowana w Pythonie, GTK4 i Libadwaita. Program kataloguje systemy RPG, podręczniki, suplementy, sesje, graczy, wydawców oraz gry planszowe i karciane.
 
@@ -6,7 +6,7 @@ Repozytorium wynikowe: https://github.com/Lioheart/Sesyjka
 
 Projekt źródłowy i atrybucja: https://github.com/ZuraffPL/sesyjka
 
-## Sesyjka Cloud 0.9.13
+## Sesyjka Cloud 0.9.17
 
 Sesyjka działa teraz w modelu **offline-first**. Wszystkie dotychczasowe bazy SQLite nadal są lokalnym źródłem danych i program działa bez Internetu. Osobna baza `sync.db` przechowuje wyłącznie stan synchronizacji, identyfikator urządzenia i konflikty. Nie dodaje żadnych kolumn ani tabel do `systemy_rpg.db`, `sesje_rpg.db`, `gracze.db`, `wydawcy.db` ani `planszowe.db`. Nowa biblioteka cyfrowa korzysta z osobnego `zasoby.db`, więc cztery bazy projektu źródłowego pozostają bez zmian.
 
@@ -25,13 +25,13 @@ Synchronizacja działa ręcznie oraz automatycznie w ustalonym interwale. Lokaln
 
 Jeżeli ten sam rekord zmienił się lokalnie i w chmurze, pierwszeństwo ma aktualny rekord z lokalnej bazy SQLite. Jeżeli lokalny rekord nie zmienił się od poprzedniej synchronizacji, zmiana z chmury może zostać zastosowana lokalnie. Usunięcia są synchronizowane jako jawne tombstone `deleted=true`. Okno konfliktów pozostaje dostępne do obsługi nierozwiązanych konfliktów zapisanych przez starsze wersje programu.
 
-Sesyjka nie otrzymuje ani nie zapisuje hasła Discord. Logowanie odbywa się w domyślnej przeglądarce w przepływie OAuth PKCE. Token odświeżania jest chroniony uprawnieniami pliku `0600`, ale w wersji 0.9.13 nie jest szyfrowany przez Sesyjkę. Nie kopiuj pliku sesji między użytkownikami ani urządzeniami. Token sesji jest przechowywany w `${XDG_CONFIG_HOME:-~/.config}/sesyjka/cloud-session.json` z prawami `0600`.
+Sesyjka nie otrzymuje ani nie zapisuje hasła Discord. Logowanie odbywa się w domyślnej przeglądarce w przepływie OAuth PKCE. Token odświeżania jest chroniony uprawnieniami pliku `0600`, ale w wersji 0.9.17 nie jest szyfrowany przez Sesyjkę. Nie kopiuj pliku sesji między użytkownikami ani urządzeniami. Token sesji jest przechowywany w `${XDG_CONFIG_HOME:-~/.config}/sesyjka/cloud-session.json` z prawami `0600`.
 
 ## Funkcje
 
 Zakładka **Systemy RPG** obsługuje hierarchię systemów gry, grup organizacyjnych i przypisanych do nich pozycji. Dostępne są statusy kolekcji i gry, format fizyczny, PDF i VTT, język, rok wydania, ISBN, ceny oraz waluty. Tabele używają natywnego stylu Adwaita, wyszukiwania globalnego, filtrów kolumnowych, sortowania, zmiany szerokości kolumn i menu kontekstowego. Niestabilne kolorowanie prywatnych widgetów wierszy `Gtk.ColumnView` zostało usunięte, ponieważ na części wersji GTK prowadziło do błędów dostępności i awarii procesu.
 
-Formularz pozycji RPG zawsze pokazuje nazwę, typ, system RPG, wydawcę, formaty, język, status gry, status kolekcji, rok wydania i ISBN. Dla suplementów udostępnia wielokrotny wybór podgrup zapisywanych separatorem ` | `: scenariusz lub kampania, rozwinięcie zasad, moduł, lorebook lub sourcebook, bestiariusz oraz starter. Pola cen fizycznej, VTT i PDF pojawiają się tylko dla zaznaczonych formatów. Cena łączna jest liczona automatycznie. Cena sprzedaży jest dostępna wyłącznie dla statusów `Na sprzedaż` i `Sprzedane`. Pole języka korzysta z listy PL, ENG, DE, FR, ES, IT lub Inny. Pole waluty zakupu podpowiada popularne kody PLN, USD, EUR i GBP. ISBN-10 i ISBN-13 są walidowane, ale niepoprawna wartość może zostać zapisana po potwierdzeniu ostrzeżenia.
+Formularz zwykłej pozycji RPG pokazuje nazwę, typ, system RPG, wydawcę, formaty, język, status gry, status kolekcji, rok wydania i ISBN. Dla typu `Grupa` pozostają wyłącznie pola Nazwa, Typ i System RPG, ponieważ grupa jest tylko kontenerem organizacyjnym. Przy aktualizacji do 0.9.17 zbędne metadane zapisane wcześniej w rekordach grup są usuwane po utworzeniu kopii bezpieczeństwa. Dla suplementów udostępnia wielokrotny wybór podgrup zapisywanych separatorem ` | `: scenariusz lub kampania, rozwinięcie zasad, moduł, lorebook lub sourcebook, bestiariusz oraz starter. Pola cen fizycznej, VTT i PDF pojawiają się tylko dla zaznaczonych formatów. Cena łączna jest liczona automatycznie. Cena sprzedaży jest dostępna wyłącznie dla statusów `Na sprzedaż` i `Sprzedane`. Pole języka korzysta z listy PL, ENG, DE, FR, ES, IT lub Inny. Pole waluty zakupu podpowiada popularne kody PLN, USD, EUR i GBP. ISBN-10 i ISBN-13 są walidowane, ale niepoprawna wartość może zostać zapisana po potwierdzeniu ostrzeżenia.
 
 Zakładka **Sesje RPG** przypisuje sesje do systemów gry. Formularz obsługuje mistrza gry, sesje GM-less, kampanie, jednostrzały, tryb gry, przygody, notatki i grupy graczy. Zapis sesji bez co najmniej jednego istniejącego gracza jest blokowany. Dla zaznaczonej sesji menu `Kalendarz` otwiera w przeglądarce wstępnie wypełnione wydarzenie Google Calendar. Dla Apple/iCloud tworzony jest pojedynczy plik `.ics` w katalogu Pobrane/Downloads i otwierany jest iCloud Calendar. Nadal dostępny jest eksport wszystkich sesji do ICS i CSV.
 
@@ -46,7 +46,7 @@ Integracja **DriveThruRPG** jest oznaczona jako eksperymentalna. Sesyjka przyjmu
 
 Zakładka **Gry planszowe** korzysta z osobnej bazy `planszowe.db`. Przechowuje gry planszowe i karciane, zakres liczby graczy, czas rozgrywki, minimalny wiek, cenę, walutę, status gry, status kolekcji, wydawcę, rok wydania. Wydawca jest wybierany bezpośrednio z bazy `wydawcy.db`, a jego usunięcie jest blokowane, gdy pozostaje powiązany z grą.
 
-Statystyki obejmują systemy RPG, sesje, graczy, wydawców, formaty fizyczne i PDF, łączną liczbę planszówek i karcianek oraz sumę cen zakupu wszystkich pozycji RPG i gier stołowych, podaną osobno dla każdej waluty. Wykres gier stołowych pokazuje osobno planszówki i karcianki. Dwie tabele zestawień są rozdzielone odstępem i pionowym separatorem.
+Statystyki mają dwa podwidoki. Zakładka `Wykresy` pokazuje wszystkie kafelki podsumowania w jednym wierszu oraz natywny wykres kołowy pod nimi. Kafelek `Wartość pozycji` ma własny wykres wartości pozycji RPG zagregowanej według systemu RPG, z zachowaniem waluty. Gry planszowe i karciane pozostają uwzględnione w wartości kafelka, ale nie są mieszane z wykresem systemów RPG. Jeżeli kolekcja korzysta z wielu walut, wykres pokazuje jedną walutę naraz bez błędnego sumowania różnych jednostek. Zakładka `Sesje i gracze` zawiera dwie tabele: sesje według systemu oraz udział graczy.
 
 Transfer danych obejmuje eksport ZIP, eksport do folderu, eksport XLSX, eksport sesji do ICS i CSV, import z walidacją i kopią zapasową oraz tryb gościa tylko do odczytu.
 
@@ -54,7 +54,28 @@ Formularz pozycji RPG ma dzielony układ. Około 60% szerokości zajmują pola e
 
 Wyszukiwanie ISBN korzysta z publicznego API Biblioteki Narodowej, Open Library oraz Google Books. ISBN jest normalizowany przed wyszukiwaniem, dlatego myślniki i spacje nie mają wpływu na wynik. Program wylicza również odpowiadający ISBN-10 lub ISBN-13 i próbuje oba identyfikatory. Google Books jest przeszukiwane kolejno po `isbn:`, po samym numerze oraz, gdy katalog biblioteczny dostarczy tytuł, także po tytule i wydawcy. Okładki są pobierane z wielu kandydatów. Jeżeli API Google nie zwraca `imageLinks`, program próbuje front cover po identyfikatorze woluminu Google Books. Okładki są zapisywane w `${XDG_CACHE_HOME:-~/.cache}/sesyjka/covers/`, a metadane i informacja o zakończonej próbie pobrania okładki w `${XDG_CACHE_HOME:-~/.cache}/sesyjka/books/`. Automatyczne otwarcie rekordu najpierw korzysta z tego cache. Przycisk `Pobierz z ISBN` wymusza odświeżenie z internetu. Opcjonalnie można ustawić `SESYJKA_GOOGLE_BOOKS_API_KEY`.
 
-## Zmiany w 0.9.13
+## Zmiany w 0.9.17
+
+- pozycja typu `Grupa` przechowuje i edytuje wyłącznie nazwę, typ oraz przypisanie do systemu RPG
+- przy pierwszym uruchomieniu 0.9.17 stare dane dodatkowe grup są usuwane z `systemy_rpg.db` po automatycznym utworzeniu kopii bezpieczeństwa
+- synchronizacja Cloud nie pozwala starszym rekordom grup z chmury ponownie wprowadzić usuniętych metadanych
+- wykres `Wartość pozycji` agreguje wartość pozycji RPG według systemu RPG zamiast według tytułów
+
+## Zmiany w 0.9.16
+
+- wszystkie kafelki podsumowania, w tym `Wartość pozycji`, są wyświetlane w jednym wierszu
+- Statystyki mają dwie podzakładki: `Wykresy` oraz `Sesje i gracze`. Wykres nie jest już ściskany przez tabele i pozostaje w całości widoczny pod kafelkami
+- kafelek `Wartość pozycji` otwiera wykres wartości według tytułu. Wartości są formatowane z walutą i dwoma miejscami po przecinku
+- gdy w kolekcji występuje więcej niż jedna waluta, wykres pokazuje PLN, jeśli jest dostępny, albo pierwszą dostępną walutę. Pozostałe sumy nadal pozostają widoczne w kafelku, dzięki czemu różne waluty nie są niepoprawnie sumowane na jednym wykresie
+- znaczniki obecności formatów `Fiz.`, `PDF` i `VTT` mają teraz mocny, wypełniony znacznik w kolorze sukcesu, dzięki czemu nie zlewają się z tłem tabeli
+
+## Zmiany w 0.9.15
+
+- naprawiono rysowanie wykresu kołowego w zakładce Statystyki. Poprzednia wersja używała nazw metod Cairo niezgodnych z Pythonowym API, przez co widoczna była legenda, ale sam wykres pozostawał pusty
+- liczba pozycji w wierszach systemów RPG ma poprawne formy: `1 pozycja`, `2-4 pozycje`, `5 i więcej pozycji`
+- kolumny `Fiz.`, `PDF` i `VTT` w tabeli Systemy RPG używają teraz graficznych znaczników obecności lub braku formatu zamiast tekstu `Tak`
+
+## Zmiany w 0.9.14
 
 - lokalizacje zasobów cyfrowych zaczynające się od `https://` lub `http://` są wyświetlane w edytorze jako klikalne linki i otwierają się w domyślnej przeglądarce
 - lokalizacje wskazujące pliki lokalne, NAS lub USB pozostają zwykłym tekstem, więc kliknięcie nie zmienia ich zachowania
@@ -266,7 +287,7 @@ sync.db
 
 Pierwsze cztery pliki zachowują schematy zgodne z projektem `ZuraffPL/sesyjka`. Nowa funkcja planszówek nie dodaje tabel ani kolumn do tych baz. Jest przechowywana wyłącznie w `planszowe.db`.
 
-Import i tryb gościa nadal akceptują zestaw zawierający tylko cztery oryginalne bazy. W takim przypadku zakładka gier planszowych pozostaje pusta. Eksport tworzony przez wersję 0.9.13 zawiera sześć baz danych użytkownika, w tym `planszowe.db` i `zasoby.db`. `sync.db` nie jest eksportowany, ponieważ zawiera stan konkretnego konta i urządzenia.
+Import i tryb gościa nadal akceptują zestaw zawierający tylko cztery oryginalne bazy. W takim przypadku zakładka gier planszowych pozostaje pusta. Eksport tworzony przez wersję 0.9.14 zawiera sześć baz danych użytkownika, w tym `planszowe.db` i `zasoby.db`. `sync.db` nie jest eksportowany, ponieważ zawiera stan konkretnego konta i urządzenia.
 
 Log diagnostyczny:
 

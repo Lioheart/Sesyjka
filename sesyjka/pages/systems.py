@@ -60,6 +60,11 @@ class SystemsPage(CrudPage):
             "pozycję RPG",
             grouped=True,
             tree_key="nazwa",
+            boolean_icon_columns={
+                "fizyczny_tekst": "fizyczny",
+                "pdf_tekst": "pdf",
+                "vtt": "vtt",
+            },
         )
         self.table.set_context_actions(self._context_edit, self._context_delete)
         self.game_system_button = Gtk.Button(label="Dodaj system gry")
@@ -80,6 +85,15 @@ class SystemsPage(CrudPage):
                 for row in self.repository.publishers()
             ],
         ]
+
+    @staticmethod
+    def _position_count_text(count: int) -> str:
+        count = max(int(count), 0)
+        if count == 1:
+            return "1 pozycja"
+        if 2 <= count <= 4:
+            return f"{count} pozycje"
+        return f"{count} pozycji"
 
     def load_records(self) -> list[dict[str, Any]]:
         positions = self.repository.systems()
@@ -153,7 +167,7 @@ class SystemsPage(CrudPage):
                     "id": f"S{game_id}",
                     "nazwa": str(game["nazwa"]),
                     "typ": "System RPG",
-                    "typ_suplementu": f"{game.get('liczba_pozycji', 0)} pozycji",
+                    "typ_suplementu": self._position_count_text(int(game.get("liczba_pozycji", 0) or 0)),
                     "wydawca_nazwa": game.get("wydawca_nazwa", ""),
                     "jezyk": game.get("jezyk", ""),
                     "_is_group": True,
@@ -176,7 +190,7 @@ class SystemsPage(CrudPage):
                     "id": f"S{missing_game_id}",
                     "nazwa": f"Nieznany system #{missing_game_id}",
                     "typ": "System RPG",
-                    "typ_suplementu": f"{len(records)} pozycji",
+                    "typ_suplementu": self._position_count_text(len(records)),
                     "_is_group": True,
                     "_is_entity": False,
                     "_depth": 0,
@@ -192,7 +206,7 @@ class SystemsPage(CrudPage):
                     "id": "-",
                     "nazwa": "Bez przypisanego systemu",
                     "typ": "Grupa",
-                    "typ_suplementu": f"{len(orphaned)} pozycji",
+                    "typ_suplementu": self._position_count_text(len(orphaned)),
                     "_is_group": True,
                     "_is_entity": False,
                     "_depth": 0,
@@ -849,15 +863,30 @@ class SystemsPage(CrudPage):
             group_selector.set_choices(choices, selected_id)
 
         def update_visibility(*_args: object) -> None:
-            form.set_row_visible(group_selector, item_type.text() != "Grupa")
-            form.set_row_visible(supplement_box, item_type.text() == "Suplement")
-            form.set_row_visible(vtt_platform, vtt_enabled.get_active())
-            form.set_row_visible(price_physical, physical.get_active())
-            form.set_row_visible(price_pdf, pdf.get_active())
-            form.set_row_visible(price_vtt, vtt_enabled.get_active())
-            selling = collection_status.text() in {"Na sprzedaż", "Sprzedane"}
+            is_group = item_type.text() == "Grupa"
+
+            # Grupa jest wyłącznie elementem organizacyjnym kolekcji. Nie ma
+            # własnych danych bibliograficznych, formatów, statusów ani cen.
+            # W formularzu pozostają tylko Nazwa, Typ i System RPG.
+            form.set_row_visible(group_selector, not is_group)
+            form.set_row_visible(publisher_row, not is_group)
+            form.set_row_visible(formats, not is_group)
+            form.set_row_visible(language, not is_group)
+            form.set_row_visible(game_status, not is_group)
+            form.set_row_visible(collection_status, not is_group)
+            form.set_row_visible(year, not is_group)
+            form.set_row_visible(isbn, not is_group)
+            form.set_row_visible(supplement_box, not is_group and item_type.text() == "Suplement")
+            form.set_row_visible(vtt_platform, not is_group and vtt_enabled.get_active())
+            form.set_row_visible(price_physical, not is_group and physical.get_active())
+            form.set_row_visible(price_pdf, not is_group and pdf.get_active())
+            form.set_row_visible(price_vtt, not is_group and vtt_enabled.get_active())
+            form.set_row_visible(purchase_price, not is_group)
+            form.set_row_visible(currency, not is_group)
+            selling = not is_group and collection_status.text() in {"Na sprzedaż", "Sprzedane"}
             form.set_row_visible(sale_price, selling)
             form.set_row_visible(sale_currency, selling)
+            preview.set_visible(not is_group)
             update_total()
 
         for toggle in (physical, pdf, vtt_enabled):
@@ -879,6 +908,14 @@ class SystemsPage(CrudPage):
             selected_game_system_id = game_system.identifier()
             if selected_game_system_id is None:
                 raise ValueError("Przypisz pozycję do systemu RPG.")
+
+            if item_type.text() == "Grupa":
+                return {
+                    "nazwa": name.get_text(),
+                    "typ": "Grupa",
+                    "system_gry_id": selected_game_system_id,
+                    "system_glowny_id": None,
+                }
 
             vtt_name = vtt_platform.get_text().strip() if vtt_enabled.get_active() else ""
             if vtt_enabled.get_active() and not vtt_name:

@@ -433,6 +433,43 @@ class DatabaseManager:
                     existing_columns = self._columns(connection, table)
                     if not required_columns.issubset(existing_columns):
                         return True
+
+                # 0.9.17 wprowadza migrację danych dla rekordów typu Grupa.
+                # Grupa ma przechowywać wyłącznie nazwę, typ i system_gry_id.
+                # Traktujemy stare dodatkowe wartości jak migrację schematu, aby
+                # przed ich usunięciem powstała standardowa kopia bezpieczeństwa.
+                if database.name == "systemy_rpg.db":
+                    stale_group = connection.execute(
+                        """
+                        SELECT 1
+                        FROM systemy_rpg
+                        WHERE LOWER(TRIM(typ)) = 'grupa'
+                          AND (
+                            system_glowny_id IS NOT NULL
+                            OR NULLIF(TRIM(COALESCE(typ_suplementu, '')), '') IS NOT NULL
+                            OR wydawca_id IS NOT NULL
+                            OR COALESCE(fizyczny, 0) <> 0
+                            OR COALESCE(pdf, 0) <> 0
+                            OR NULLIF(TRIM(COALESCE(jezyk, '')), '') IS NOT NULL
+                            OR NULLIF(TRIM(COALESCE(status_gra, '')), '') IS NOT NULL
+                            OR NULLIF(TRIM(COALESCE(status_kolekcja, '')), '') IS NOT NULL
+                            OR cena_zakupu IS NOT NULL
+                            OR NULLIF(TRIM(COALESCE(waluta_zakupu, '')), '') IS NOT NULL
+                            OR cena_sprzedazy IS NOT NULL
+                            OR NULLIF(TRIM(COALESCE(waluta_sprzedazy, '')), '') IS NOT NULL
+                            OR NULLIF(TRIM(COALESCE(vtt, '')), '') IS NOT NULL
+                            OR NULLIF(TRIM(COALESCE(system_glowny_nazwa_custom, '')), '') IS NOT NULL
+                            OR cena_fiz IS NOT NULL
+                            OR cena_pdf IS NOT NULL
+                            OR cena_vtt IS NOT NULL
+                            OR rok_wydania IS NOT NULL
+                            OR NULLIF(TRIM(COALESCE(isbn, '')), '') IS NOT NULL
+                          )
+                        LIMIT 1
+                        """
+                    ).fetchone()
+                    if stale_group is not None:
+                        return True
         except (sqlite3.DatabaseError, OSError):
             return True
         return False
@@ -568,6 +605,52 @@ class DatabaseManager:
                     "rok_wydania": "INTEGER",
                     "isbn": "TEXT",
                 },
+            )
+            connection.execute(
+                """
+                UPDATE systemy_rpg
+                SET system_glowny_id = NULL,
+                    typ_suplementu = NULL,
+                    wydawca_id = NULL,
+                    fizyczny = 0,
+                    pdf = 0,
+                    jezyk = NULL,
+                    status_gra = NULL,
+                    status_kolekcja = NULL,
+                    cena_zakupu = NULL,
+                    waluta_zakupu = NULL,
+                    cena_sprzedazy = NULL,
+                    waluta_sprzedazy = NULL,
+                    vtt = NULL,
+                    system_glowny_nazwa_custom = NULL,
+                    cena_fiz = NULL,
+                    cena_pdf = NULL,
+                    cena_vtt = NULL,
+                    rok_wydania = NULL,
+                    isbn = NULL
+                WHERE LOWER(TRIM(typ)) = 'grupa'
+                  AND (
+                    system_glowny_id IS NOT NULL
+                    OR NULLIF(TRIM(COALESCE(typ_suplementu, '')), '') IS NOT NULL
+                    OR wydawca_id IS NOT NULL
+                    OR COALESCE(fizyczny, 0) <> 0
+                    OR COALESCE(pdf, 0) <> 0
+                    OR NULLIF(TRIM(COALESCE(jezyk, '')), '') IS NOT NULL
+                    OR NULLIF(TRIM(COALESCE(status_gra, '')), '') IS NOT NULL
+                    OR NULLIF(TRIM(COALESCE(status_kolekcja, '')), '') IS NOT NULL
+                    OR cena_zakupu IS NOT NULL
+                    OR NULLIF(TRIM(COALESCE(waluta_zakupu, '')), '') IS NOT NULL
+                    OR cena_sprzedazy IS NOT NULL
+                    OR NULLIF(TRIM(COALESCE(waluta_sprzedazy, '')), '') IS NOT NULL
+                    OR NULLIF(TRIM(COALESCE(vtt, '')), '') IS NOT NULL
+                    OR NULLIF(TRIM(COALESCE(system_glowny_nazwa_custom, '')), '') IS NOT NULL
+                    OR cena_fiz IS NOT NULL
+                    OR cena_pdf IS NOT NULL
+                    OR cena_vtt IS NOT NULL
+                    OR rok_wydania IS NOT NULL
+                    OR NULLIF(TRIM(COALESCE(isbn, '')), '') IS NOT NULL
+                  )
+                """
             )
 
     def _init_sessions(self) -> None:

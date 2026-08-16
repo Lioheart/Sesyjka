@@ -24,6 +24,7 @@ class CrudPage(Gtk.Box):
         grouped: bool = False,
         tree_key: str = "nazwa",
         link_columns: dict[str, str] | None = None,
+        boolean_icon_columns: dict[str, str] | None = None,
     ) -> None:
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         self.parent_window = parent_window
@@ -70,6 +71,7 @@ class CrudPage(Gtk.Box):
             grouped=grouped,
             tree_key=tree_key,
             link_columns=link_columns,
+            boolean_icon_columns=boolean_icon_columns,
         )
         self.table.connect_activate(self.open_editor)
         self.table.set_context_actions(self.open_editor, self.request_delete)

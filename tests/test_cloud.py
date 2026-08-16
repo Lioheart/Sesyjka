@@ -177,6 +177,49 @@ class CloudSyncTests(unittest.TestCase):
         rows = [row for row in self.repo.publishers() if int(row["id"]) == 42]
         self.assertEqual(rows[0]["nazwa"], "Cloud Publisher")
 
+    def test_remote_legacy_group_metadata_is_not_reintroduced_locally(self) -> None:
+        game_system_id = self.repo.save_game_system({"nazwa": "System grup"})
+        self.cloud.sync(self.url, self.key)
+        self.fake.records[("rpg_items", "777")] = {
+            "id": "remote-rpg-group-777",
+            "owner_id": self.cloud.session.user_id,
+            "entity_type": "rpg_items",
+            "record_key": "777",
+            "payload": {
+                "id": 777,
+                "nazwa": "Grupa z chmury",
+                "typ": "Grupa",
+                "system_gry_id": game_system_id,
+                "wydawca_id": 55,
+                "fizyczny": 1,
+                "pdf": 1,
+                "jezyk": "PL",
+                "status_gra": "Grane",
+                "status_kolekcja": "W kolekcji",
+                "cena_zakupu": 99.0,
+                "waluta_zakupu": "PLN",
+                "vtt": "Foundry VTT",
+                "rok_wydania": 2024,
+                "isbn": "legacy",
+            },
+            "version": 1,
+            "deleted": False,
+            "updated_at": "2026-08-15T00:00:59Z",
+            "device_id": "old-client",
+        }
+        report = self.cloud.sync(self.url, self.key)
+        self.assertGreaterEqual(report.downloaded, 1)
+        group = next(row for row in self.repo.systems() if int(row["id"]) == 777)
+        self.assertEqual(group["nazwa"], "Grupa z chmury")
+        self.assertEqual(group["system_gry_id"], game_system_id)
+        self.assertEqual(group["fizyczny"], 0)
+        self.assertEqual(group["pdf"], 0)
+        for key in (
+            "wydawca_id", "jezyk", "status_gra", "status_kolekcja",
+            "cena_zakupu", "waluta_zakupu", "vtt", "rok_wydania", "isbn",
+        ):
+            self.assertIsNone(group[key], key)
+
     def test_local_database_wins_when_both_sides_changed(self) -> None:
         publisher_id = self.repo.save_publisher({"nazwa": "Start", "kraj": "PL", "strona": ""})
         self.cloud.sync(self.url, self.key)

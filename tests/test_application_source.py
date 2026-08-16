@@ -76,29 +76,58 @@ class ApplicationSourceTests(unittest.TestCase):
         self.assertNotIn("\n.background,", source)
         self.assertNotIn('add_css_class("background")', source)
 
-    def test_statistics_use_native_quantity_chart_instead_of_detail_table(self) -> None:
+    def test_statistics_use_native_pie_chart_widget_instead_of_detail_table(self) -> None:
         page_source = (self.root / "sesyjka" / "pages" / "statistics.py").read_text(
             encoding="utf-8"
         )
         widget_source = (self.root / "sesyjka" / "widgets.py").read_text(
             encoding="utf-8"
         )
-        self.assertIn("QuantityBarChart", page_source)
-        self.assertIn("Gtk.ProgressBar", widget_source)
+        self.assertIn("PieChartWidget", page_source)
+        self.assertIn("Gtk.DrawingArea", widget_source)
+        self.assertIn("cr.set_source_rgb", widget_source)
+        self.assertIn("cr.set_source_rgba", widget_source)
+        self.assertNotIn("setSourceRGB", widget_source)
+        self.assertIn("Pozostałe", widget_source)
         self.assertNotIn("Szczegóły:", page_source)
         self.assertNotIn("detail_table", page_source)
 
-    def test_statistics_contains_chart_and_table_separators(self) -> None:
+    def test_statistics_has_chart_and_tables_subtabs_without_paned_layout(self) -> None:
         page_source = (self.root / "sesyjka" / "pages" / "statistics.py").read_text(
             encoding="utf-8"
         )
-        app_source = (self.root / "sesyjka" / "app.py").read_text(encoding="utf-8")
-        self.assertIn("Gtk.Separator", page_source)
-        self.assertIn("statistics-section-separator", page_source)
+        self.assertIn("Gtk.StackSwitcher", page_source)
+        self.assertIn('"Wykresy"', page_source)
+        self.assertIn('"Sesje i gracze"', page_source)
         self.assertIn("statistics-table-separator", page_source)
-        self.assertIn("spacing=12", page_source)
-        self.assertIn(".statistics-section-separator", app_source)
-        self.assertIn(".statistics-table-separator", app_source)
+        self.assertNotIn("Gtk.Paned", page_source)
+        self.assertIn("self.cards = Gtk.Box", page_source)
+        self.assertIn("self.chart = PieChartWidget()", page_source)
+
+    def test_systems_table_uses_polish_count_inflection_and_format_icons(self) -> None:
+        systems_source = (self.root / "sesyjka" / "pages" / "systems.py").read_text(
+            encoding="utf-8"
+        )
+        widgets_source = (self.root / "sesyjka" / "widgets.py").read_text(
+            encoding="utf-8"
+        )
+        app_source = (self.root / "sesyjka" / "app.py").read_text(encoding="utf-8")
+        for token in (
+            'return "1 pozycja"',
+            'return f"{count} pozycje"',
+            'return f"{count} pozycji"',
+            '"fizyczny_tekst": "fizyczny"',
+            '"pdf_tekst": "pdf"',
+            '"vtt": "vtt"',
+        ):
+            self.assertIn(token, systems_source)
+        self.assertIn("boolean_icon_columns", widgets_source)
+        self.assertIn("object-select-symbolic", widgets_source)
+        self.assertIn("window-close-symbolic", widgets_source)
+        self.assertIn(".format-present", app_source)
+        self.assertIn("background-color: @success_color", app_source)
+        self.assertIn("color: white", app_source)
+        self.assertIn(".format-absent", app_source)
 
     def test_context_menu_actions_have_symbolic_icons(self) -> None:
         source = (self.root / "sesyjka" / "widgets.py").read_text(encoding="utf-8")
@@ -324,13 +353,35 @@ class ApplicationSourceTests(unittest.TestCase):
         self.assertIn('confirm_label: str = "Usuń"', dialogs)
         self.assertIn('"suggested-action"', dialogs)
 
-    def test_statistics_include_total_collection_value(self) -> None:
+    def test_statistics_include_clickable_collection_value_chart(self) -> None:
         page = (self.root / "sesyjka" / "pages" / "statistics.py").read_text(encoding="utf-8")
         repository = (self.root / "sesyjka" / "repository.py").read_text(encoding="utf-8")
+        widgets = (self.root / "sesyjka" / "widgets.py").read_text(encoding="utf-8")
         self.assertIn('"Wartość pozycji"', repository)
+        self.assertIn('"title": f"Wartość pozycji RPG według systemu', repository)
+        self.assertIn('"unit": value_chart_currency', repository)
+        self.assertIn('"decimals": 2', repository)
         self.assertIn('cena_zakupu', repository)
         self.assertIn('item.get("cena")', repository)
         self.assertIn('clickable = label in charts', page)
+        self.assertIn('value_suffix=str(chart.get("unit")', page)
+        self.assertIn("def _format_value", widgets)
+
+    def test_group_editor_shows_only_name_type_and_game_system(self) -> None:
+        systems = (self.root / "sesyjka" / "pages" / "systems.py").read_text(encoding="utf-8")
+        repository = (self.root / "sesyjka" / "repository.py").read_text(encoding="utf-8")
+        database = (self.root / "sesyjka" / "database_manager.py").read_text(encoding="utf-8")
+        self.assertIn('is_group = item_type.text() == "Grupa"', systems)
+        for widget in (
+            "publisher_row", "formats", "language", "game_status", "collection_status",
+            "year", "isbn", "purchase_price", "currency",
+        ):
+            self.assertIn(f"form.set_row_visible({widget}, not is_group)", systems)
+        self.assertIn("preview.set_visible(not is_group)", systems)
+        self.assertIn('if item_type.text() == "Grupa":', systems)
+        self.assertIn('if item_type == "Grupa":', repository)
+        self.assertIn("UPDATE systemy_rpg", database)
+        self.assertIn("LOWER(TRIM(typ)) = 'grupa'", database)
 
     def test_session_calendar_export_is_available_in_ics_and_csv(self) -> None:
         transfer = (self.root / "sesyjka" / "transfer.py").read_text(encoding="utf-8")

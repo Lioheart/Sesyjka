@@ -87,8 +87,8 @@ BASE_CSS = """
   box-shadow: inset 0 0 0 2px @accent_color;
 }
 .stat-card {
-  min-width: 130px;
-  padding: 16px;
+  min-width: 104px;
+  padding: 14px 10px;
   border: 1px solid alpha(@window_fg_color, 0.14);
   border-radius: 12px;
   background-color: @card_bg_color;
@@ -98,7 +98,7 @@ BASE_CSS = """
   padding: 0;
 }
 .stat-card-button .stat-card {
-  min-width: 130px;
+  min-width: 104px;
 }
 
 .chart-shell {
@@ -114,6 +114,25 @@ BASE_CSS = """
 .chart-count {
   font-weight: 700;
   min-width: 3em;
+}
+.boolean-status-icon {
+  min-width: 24px;
+  min-height: 24px;
+  -gtk-icon-size: 18px;
+  padding: 3px;
+  border-radius: 999px;
+}
+.format-present {
+  color: white;
+  background-color: @success_color;
+  box-shadow: 0 0 0 1px alpha(@success_color, 0.80);
+}
+.format-absent {
+  color: alpha(@window_fg_color, 0.30);
+  background-color: transparent;
+}
+.statistics-subtabs {
+  margin-bottom: 2px;
 }
 .context-menu-popover button {
   min-width: 150px;
@@ -1126,6 +1145,14 @@ class SesyjkaWindow(Adw.ApplicationWindow):
     def show_history(self) -> None:
         dialog = ModalWindow(self, "Historia zmian", width=720, height=620)
         history_text = (
+            "0.9.17\n"
+            "Pozycja typu Grupa ma teraz wyłącznie pola Nazwa, Typ i System RPG. Przy uruchomieniu stare metadane grup są usuwane z bazy po utworzeniu kopii bezpieczeństwa, a Cloud nie przywraca ich ze starszych rekordów. Wykres Wartość pozycji agreguje teraz wartość pozycji RPG według systemu RPG zamiast według tytułu.\n\n"
+            "0.9.16\n"
+            "Statystyki mają teraz dwie podzakładki: Wykresy oraz Sesje i gracze. Wszystkie kafelki, w tym Wartość pozycji, pozostają w jednym wierszu, a wykres jest w całości widoczny pod nimi. Dodano wykres wartości pozycji według tytułu z poprawną obsługą waluty. W tabeli Systemy RPG obecne formaty Fiz., PDF i VTT mają mocniejszy, wypełniony znacznik.\n\n"
+            "0.9.15\n"
+            "Naprawiono rysowanie wykresu kołowego w Statystykach. W tabeli Systemy RPG poprawiono odmianę liczby pozycji oraz zastąpiono tekstowe znaczniki Fiz., PDF i VTT graficznymi ikonami obecności lub braku formatu.\n\n"
+            "0.9.14\n"
+            "Zakładka Statystyki korzysta teraz z natywnego wykresu kołowego z legendą, udziałami procentowymi i automatycznym grupowaniem drobnych kategorii do pozycji Pozostałe, dzięki czemu dashboard biblioteki jest czytelniejszy.\n\n"
             "0.9.13\n"
             "Adresy WWW zapisane jako lokalizacje zasobów cyfrowych są teraz klikalnymi linkami i otwierają się w domyślnej przeglądarce. Lokalne ścieżki plików pozostają zwykłym tekstem.\n\n"
             "0.9.12\n"

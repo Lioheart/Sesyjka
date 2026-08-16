@@ -1268,6 +1268,38 @@ class CloudService:
                     clean = {key: value for key, value in payload.items() if key in columns}
                     for column, value in zip(spec.key_columns, key_values):
                         clean[column] = value
+
+                    # Od 0.9.17 rekord Grupa jest wyłącznie kontenerem
+                    # organizacyjnym. Stary klient lub stary rekord w chmurze nie
+                    # może ponownie wprowadzić usuniętych metadanych do lokalnej
+                    # bazy SQLite.
+                    if (
+                        spec.name == "rpg_items"
+                        and str(clean.get("typ") or "").strip().casefold() == "grupa"
+                    ):
+                        clean.update(
+                            {
+                                "system_glowny_id": None,
+                                "typ_suplementu": None,
+                                "wydawca_id": None,
+                                "fizyczny": 0,
+                                "pdf": 0,
+                                "jezyk": None,
+                                "status_gra": None,
+                                "status_kolekcja": None,
+                                "cena_zakupu": None,
+                                "waluta_zakupu": None,
+                                "cena_sprzedazy": None,
+                                "waluta_sprzedazy": None,
+                                "vtt": None,
+                                "system_glowny_nazwa_custom": None,
+                                "cena_fiz": None,
+                                "cena_pdf": None,
+                                "cena_vtt": None,
+                                "rok_wydania": None,
+                                "isbn": None,
+                            }
+                        )
                     names = list(clean)
                     placeholders = ", ".join("?" for _ in names)
                     conflict = ", ".join(spec.key_columns)

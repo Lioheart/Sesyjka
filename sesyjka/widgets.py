@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from typing import Any
+import math
 
 import gi
 
@@ -13,6 +14,242 @@ class TableRow(GObject.Object):
         super().__init__()
         self.record = record
         self.values = tuple(values)
+
+
+
+
+class PieChartWidget(Gtk.Box):
+    """Dostępny wykres kołowy z legendą i krótkim podsumowaniem.
+
+    Widget korzysta z natywnego Gtk.DrawingArea zamiast zewnętrznych bibliotek
+    wykresowych, dzięki czemu zachowuje niski koszt zależności i dobrze działa
+    w motywach Adwaita. Przy większej liczbie kategorii agreguje mniej istotne
+    pozycje do sekcji „Pozostałe”, żeby wykres pozostawał czytelny.
+    """
+
+    _MAX_VISIBLE_SLICES = 8
+    _PALETTE: tuple[tuple[float, float, float], ...] = (
+        (0.18, 0.49, 0.20),
+        (0.11, 0.53, 0.89),
+        (0.77, 0.32, 0.24),
+        (0.51, 0.24, 0.86),
+        (0.95, 0.61, 0.07),
+        (0.00, 0.62, 0.58),
+        (0.89, 0.29, 0.56),
+        (0.38, 0.43, 0.46),
+    )
+
+    def __init__(self) -> None:
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        self.add_css_class("chart-shell")
+        self.set_vexpand(True)
+        self.set_hexpand(True)
+
+        self.heading = Gtk.Label(xalign=0.0)
+        self.heading.add_css_class("title-3")
+        self.append(self.heading)
+
+        self.summary = Gtk.Label(xalign=0.0)
+        self.summary.add_css_class("dim-label")
+        self.summary.set_wrap(True)
+        self.append(self.summary)
+
+        self.stack = Gtk.Stack()
+        self.stack.set_vexpand(True)
+        self.append(self.stack)
+
+        self.empty = Gtk.Label(label="Brak danych do wyświetlenia", xalign=0.0)
+        self.empty.add_css_class("dim-label")
+        self.empty.set_margin_top(24)
+        self.stack.add_named(self.empty, "empty")
+
+        content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
+        content.set_vexpand(True)
+        self.stack.add_named(content, "content")
+
+        chart_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        chart_box.set_halign(Gtk.Align.CENTER)
+        chart_box.set_valign(Gtk.Align.CENTER)
+        content.append(chart_box)
+
+        self.drawing = Gtk.DrawingArea()
+        self.drawing.set_content_width(280)
+        self.drawing.set_content_height(280)
+        self.drawing.set_size_request(280, 280)
+        self.drawing.set_hexpand(False)
+        self.drawing.set_vexpand(False)
+        self.drawing.set_draw_func(self._draw_chart)
+        chart_box.append(self.drawing)
+
+        self.legend_scroller = Gtk.ScrolledWindow()
+        self.legend_scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        self.legend_scroller.set_hexpand(True)
+        self.legend_scroller.set_vexpand(True)
+        self.legend_scroller.set_min_content_width(320)
+        content.append(self.legend_scroller)
+
+        self.legend_rows = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        self.legend_rows.set_margin_top(4)
+        self.legend_rows.set_margin_bottom(4)
+        self.legend_scroller.set_child(self.legend_rows)
+
+        self._items: list[tuple[str, float]] = []
+        self._total = 0.0
+        self._original_category_count = 0
+        self._value_suffix = ""
+        self._decimals = 0
+        self._summary_note = ""
+
+    def set_data(
+        self,
+        title: str,
+        items: Sequence[tuple[str, Any]],
+        *,
+        value_suffix: str = "",
+        decimals: int = 0,
+        summary_note: str = "",
+    ) -> None:
+        normalized: list[tuple[str, float]] = []
+        for label, raw_value in items:
+            try:
+                value = float(raw_value)
+            except (TypeError, ValueError):
+                continue
+            if value > 0:
+                normalized.append((str(label), value))
+        self._value_suffix = value_suffix.strip()
+        self._decimals = max(int(decimals), 0)
+        self._summary_note = summary_note.strip()
+        self.heading.set_text(title)
+        self._original_category_count = len(normalized)
+        self._items = self._compress_items(normalized)
+        self._total = sum(value for _label, value in self._items)
+
+        child = self.legend_rows.get_first_child()
+        while child is not None:
+            next_child = child.get_next_sibling()
+            self.legend_rows.remove(child)
+            child = next_child
+
+        if not self._items:
+            self.summary.set_text("Brak danych.")
+            self.drawing.set_tooltip_text("Brak danych do wyświetlenia")
+            self.stack.set_visible_child_name("empty")
+            return
+
+        self.stack.set_visible_child_name("content")
+        largest_label, largest_value = max(self._items, key=lambda item: item[1])
+        percent = (largest_value / self._total) * 100 if self._total else 0.0
+        grouped = self._original_category_count - len(self._items)
+        grouped_text = f" Zgrupowano {grouped} mniejsze kategorie." if grouped > 0 else ""
+        total_text = self._format_value(self._total)
+        largest_text = self._format_value(largest_value)
+        note_text = f" {self._summary_note}" if self._summary_note else ""
+        self.summary.set_text(
+            f"Łącznie: {total_text}. Kategorie: {self._original_category_count}. "
+            f"Największy udział: {largest_label} ({largest_text}, {percent:.1f}%)."
+            f"{grouped_text}{note_text}"
+        )
+
+        tooltip_lines: list[str] = []
+        for index, (label_text, value) in enumerate(self._items):
+            share = (value / self._total) * 100 if self._total else 0.0
+            color = self._color_for(index)
+            formatted_value = self._format_value(value)
+            tooltip_lines.append(f"{label_text}: {formatted_value} ({share:.1f}%)")
+            self.legend_rows.append(self._build_legend_row(index, color, label_text, value, share))
+        self.drawing.set_tooltip_text("\n".join(tooltip_lines))
+        self.drawing.queue_draw()
+
+    def _compress_items(self, items: list[tuple[str, float]]) -> list[tuple[str, float]]:
+        if len(items) <= self._MAX_VISIBLE_SLICES:
+            return items
+        head = list(items[: self._MAX_VISIBLE_SLICES - 1])
+        tail = items[self._MAX_VISIBLE_SLICES - 1 :]
+        other_total = sum(value for _label, value in tail)
+        if other_total > 0:
+            head.append((f"Pozostałe ({len(tail)})", other_total))
+        return head
+
+    def _build_legend_row(
+        self,
+        index: int,
+        color: tuple[float, float, float],
+        label_text: str,
+        value: float,
+        share: float,
+    ) -> Gtk.Widget:
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        row.add_css_class("chart-row")
+
+        swatch = Gtk.DrawingArea()
+        swatch.set_content_width(14)
+        swatch.set_content_height(14)
+        swatch.set_draw_func(self._draw_swatch, color)
+        row.append(swatch)
+
+        text_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        text_box.set_hexpand(True)
+        label = Gtk.Label(label=label_text, xalign=0.0)
+        label.set_wrap(True)
+        label.set_tooltip_text(label_text)
+        label.add_css_class("chart-legend-label")
+        meta = Gtk.Label(label=f"{share:.1f}%", xalign=0.0)
+        meta.add_css_class("dim-label")
+        text_box.append(label)
+        text_box.append(meta)
+        row.append(text_box)
+
+        count = Gtk.Label(label=self._format_value(value), xalign=1.0)
+        count.add_css_class("chart-count")
+        row.append(count)
+        return row
+
+    def _format_value(self, value: float) -> str:
+        if self._decimals <= 0:
+            number = f"{int(round(value)):,}".replace(",", " ")
+        else:
+            number = f"{value:,.{self._decimals}f}".replace(",", " ").replace(".", ",")
+        return f"{number} {self._value_suffix}".strip()
+
+    def _draw_swatch(
+        self,
+        _area: Gtk.DrawingArea,
+        cr: Any,
+        width: int,
+        height: int,
+        color: tuple[float, float, float],
+    ) -> None:
+        radius = min(width, height) / 5
+        cr.set_source_rgb(*color)
+        cr.new_path()
+        cr.arc(width / 2, height / 2, max(radius * 2, 2), 0, math.tau)
+        cr.fill()
+
+    def _draw_chart(self, _area: Gtk.DrawingArea, cr: Any, width: int, height: int) -> None:
+        if not self._items or self._total <= 0:
+            return
+        radius = max(min(width, height) * 0.38, 16)
+        center_x = width / 2
+        center_y = height / 2
+        start_angle = -math.pi / 2
+        for index, (_label, value) in enumerate(self._items):
+            slice_angle = math.tau * (value / self._total)
+            if slice_angle <= 0:
+                continue
+            cr.new_path()
+            cr.move_to(center_x, center_y)
+            cr.arc(center_x, center_y, radius, start_angle, start_angle + slice_angle)
+            cr.close_path()
+            cr.set_source_rgb(*self._color_for(index))
+            cr.fill_preserve()
+            cr.set_source_rgba(1.0, 1.0, 1.0, 0.92)
+            cr.set_line_width(2.0)
+            cr.stroke()
+            start_angle += slice_angle
+
+    def _color_for(self, index: int) -> tuple[float, float, float]:
+        return self._PALETTE[index % len(self._PALETTE)]
 
 
 class QuantityBarChart(Gtk.Box):
@@ -113,6 +350,7 @@ class DataTable(Gtk.Box):
         enable_filters: bool = True,
         enable_sorting: bool = True,
         link_columns: dict[str, str] | None = None,
+        boolean_icon_columns: dict[str, str] | None = None,
     ) -> None:
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         self.columns = list(columns)
@@ -121,6 +359,7 @@ class DataTable(Gtk.Box):
         self.enable_filters = enable_filters
         self.enable_sorting = enable_sorting
         self.link_columns = dict(link_columns or {})
+        self.boolean_icon_columns = dict(boolean_icon_columns or {})
         self.add_css_class("data-table-shell")
 
         self._source_records: list[dict[str, Any]] = []
@@ -251,6 +490,11 @@ class DataTable(Gtk.Box):
             content.set_hexpand(True)
             content.set_halign(Gtk.Align.START)
             content.add_css_class("table-link")
+        elif key in self.boolean_icon_columns:
+            content = Gtk.Image.new_from_icon_name("window-close-symbolic")
+            content.set_halign(Gtk.Align.CENTER)
+            content.set_valign(Gtk.Align.CENTER)
+            content.add_css_class("boolean-status-icon")
         else:
             label = Gtk.Label(xalign=0.0)
             label.set_hexpand(True)
@@ -287,6 +531,26 @@ class DataTable(Gtk.Box):
             content.set_uri(uri or "about:blank")
             content.set_sensitive(bool(uri))
             content.set_tooltip_text(uri or None)
+        elif isinstance(content, Gtk.Image) and key in self.boolean_icon_columns:
+            group_only = bool(row.record.get("_is_group")) and not bool(
+                row.record.get("_is_entity")
+            )
+            content.set_visible(not group_only)
+            if group_only:
+                content.set_tooltip_text(None)
+                return
+            source_key = self.boolean_icon_columns[key]
+            present = bool(row.record.get(source_key))
+            content.set_from_icon_name(
+                "object-select-symbolic" if present else "window-close-symbolic"
+            )
+            content.set_tooltip_text("Jest" if present else "Brak")
+            if present:
+                content.add_css_class("format-present")
+                content.remove_css_class("format-absent")
+            else:
+                content.add_css_class("format-absent")
+                content.remove_css_class("format-present")
         elif isinstance(content, Gtk.Label):
             content.set_text(text)
             if row.record.get("_is_group"):

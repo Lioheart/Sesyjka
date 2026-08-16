@@ -4,6 +4,7 @@ import sqlite3
 import tempfile
 import unittest
 import zipfile
+from decimal import Decimal
 from pathlib import Path
 
 from sesyjka.database_manager import DatabaseManager, ReadOnlyDatabaseError
@@ -102,10 +103,46 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(stats["charts"]["Sesje"]["items"], [("2026", 1)])
         self.assertEqual(stats["charts"]["Pozycje RPG"]["items"], [("System Testowy", 1)])
         self.assertEqual(stats["charts"]["Wydawcy"]["items"], [("Test Publisher", 1)])
+        self.assertEqual(stats["charts"]["Wartość pozycji"]["unit"], "PLN")
+        self.assertEqual(stats["charts"]["Wartość pozycji"]["decimals"], 2)
+        self.assertEqual(
+            stats["charts"]["Wartość pozycji"]["items"],
+            [("System Testowy", Decimal("149.80"))],
+        )
+        self.assertIn("planszówek", stats["charts"]["Wartość pozycji"]["note"].casefold())
 
         self.repository.delete_session(session_id)
         self.assertEqual(self.repository.sessions(), [])
 
+
+
+    def test_collection_value_chart_does_not_mix_currencies(self) -> None:
+        game_system_id = self.repository.save_game_system({"nazwa": "System walutowy"})
+        self.repository.save_system(
+            {
+                "nazwa": "Podręcznik PLN",
+                "typ": "Podręcznik główny",
+                "system_gry_id": game_system_id,
+                "cena_zakupu": "100.00",
+                "waluta_zakupu": "PLN",
+            }
+        )
+        self.repository.save_system(
+            {
+                "nazwa": "Podręcznik EUR",
+                "typ": "Podręcznik główny",
+                "system_gry_id": game_system_id,
+                "cena_zakupu": "20.00",
+                "waluta_zakupu": "EUR",
+            }
+        )
+
+        stats = self.repository.statistics()
+        self.assertEqual(stats["counts"]["Wartość pozycji"], "20,00 EUR · 100,00 PLN")
+        chart = stats["charts"]["Wartość pozycji"]
+        self.assertEqual(chart["unit"], "PLN")
+        self.assertEqual(chart["items"], [("System walutowy", Decimal("100.00"))])
+        self.assertIn("Pozostałe waluty", chart["note"])
 
     def test_publisher_website_is_exposed_as_clickable_http_uri(self) -> None:
         self.repository.save_publisher(
@@ -394,6 +431,93 @@ class RepositoryTests(unittest.TestCase):
         child = next(item for item in self.repository.systems() if item["id"] == child_id)
         self.assertEqual(child["system_glowny_id"], group_id)
         self.assertEqual(child["system_glowny_nazwa"], "Karty i pomoce")
+
+    def test_group_keeps_only_name_type_and_game_system_data(self) -> None:
+        publisher_id = self.repository.save_publisher({"nazwa": "Wydawca grupy"})
+        game_system_id = self.repository.save_game_system({"nazwa": "System grupy"})
+        group_id = self.repository.save_system(
+            {
+                "nazwa": "Grupa techniczna",
+                "typ": "Grupa",
+                "system_gry_id": game_system_id,
+                "wydawca_id": 999999,
+                "fizyczny": True,
+                "pdf": True,
+                "vtt": "Foundry VTT",
+                "jezyk": "PL",
+                "status_gra": "Grane",
+                "status_kolekcja": "W kolekcji",
+                "cena_fiz": "10",
+                "cena_pdf": "20",
+                "cena_vtt": "30",
+                "waluta_zakupu": "PLN",
+                "cena_sprzedazy": "5",
+                "waluta_sprzedazy": "PLN",
+                "rok_wydania": "2024",
+                "isbn": "9788360000000",
+            }
+        )
+        group = next(item for item in self.repository.systems() if item["id"] == group_id)
+        self.assertEqual(group["nazwa"], "Grupa techniczna")
+        self.assertEqual(group["typ"], "Grupa")
+        self.assertEqual(group["system_gry_id"], game_system_id)
+        self.assertEqual(group["fizyczny"], 0)
+        self.assertEqual(group["pdf"], 0)
+        for key in (
+            "system_glowny_id", "typ_suplementu", "wydawca_id", "jezyk",
+            "status_gra", "status_kolekcja", "cena_zakupu", "waluta_zakupu",
+            "cena_sprzedazy", "waluta_sprzedazy", "vtt",
+            "system_glowny_nazwa_custom", "cena_fiz", "cena_pdf", "cena_vtt",
+            "rok_wydania", "isbn",
+        ):
+            self.assertIsNone(group[key], key)
+
+    def test_initialize_cleans_legacy_group_metadata_after_creating_backup(self) -> None:
+        legacy_root = self.root / "legacy-group-cleanup"
+        legacy_root.mkdir()
+        legacy = DatabaseManager(legacy_root)
+        legacy.initialize()
+        repo = Repository(legacy)
+        system_id = repo.save_game_system({"nazwa": "System"})
+        group_id = repo.save_system({"nazwa": "Grupa", "typ": "Grupa", "system_gry_id": system_id})
+
+        # Symulacja rekordu utworzonego przez starszą wersję programu.
+        with sqlite3.connect(legacy_root / "systemy_rpg.db") as connection:
+            connection.execute(
+                """
+                UPDATE systemy_rpg
+                SET wydawca_id=77, fizyczny=1, pdf=1, jezyk='PL',
+                    status_gra='Grane', status_kolekcja='W kolekcji',
+                    cena_zakupu=123.45, waluta_zakupu='PLN', vtt='Foundry VTT',
+                    rok_wydania=2020, isbn='stary-isbn'
+                WHERE id=?
+                """,
+                (group_id,),
+            )
+
+        migrated = DatabaseManager(legacy_root)
+        migrated.initialize()
+        self.assertIsNotNone(migrated.last_schema_backup)
+        self.assertTrue((migrated.last_schema_backup / "systemy_rpg.db").is_file())
+        with sqlite3.connect(legacy_root / "systemy_rpg.db") as connection:
+            row = connection.execute(
+                """
+                SELECT nazwa, typ, system_gry_id, wydawca_id, fizyczny, pdf, jezyk,
+                       status_gra, status_kolekcja, cena_zakupu, waluta_zakupu,
+                       vtt, rok_wydania, isbn
+                FROM systemy_rpg WHERE id=?
+                """,
+                (group_id,),
+            ).fetchone()
+        self.assertEqual(row[:3], ("Grupa", "Grupa", system_id))
+        self.assertEqual(row[3:6], (None, 0, 0))
+        self.assertTrue(all(value is None for value in row[6:]))
+
+        # Migracja jest idempotentna. Kolejne uruchomienie nie tworzy nowej
+        # kopii ani nie traktuje już oczyszczonej grupy jako zmiany schematu.
+        second_start = DatabaseManager(legacy_root)
+        second_start.initialize()
+        self.assertIsNone(second_start.last_schema_backup)
 
     def test_group_cannot_be_converted_while_it_contains_positions(self) -> None:
         game_system_id = self.repository.save_game_system({"nazwa": "System"})

@@ -1,4 +1,4 @@
-# Sesyjka GTK4 0.9.13
+# Sesyjka GTK4 0.9.17
 
 A native Linux application built with Python, GTK4 and Libadwaita. It manages tabletop RPG systems, books, supplements, sessions, players, publishers, board games and card games. The four original SQLite databases remain compatible, while board and card games use a separate fifth database.
 
@@ -6,15 +6,15 @@ Result repository: https://github.com/Lioheart/Sesyjka
 
 Original project and attribution: https://github.com/ZuraffPL/sesyjka
 
-## Sesyjka Cloud 0.9.13
+## Sesyjka Cloud 0.9.17
 
-Version 0.9.13 uses Discord OAuth for the optional offline-first cloud synchronization. Existing SQLite databases remain the local source of truth and keep their current schemas. A separate `sync.db` stores synchronization mappings, device state and unresolved conflicts.
+Version 0.9.17 uses Discord OAuth for the optional offline-first cloud synchronization. Existing SQLite databases remain the local source of truth and keep their current schemas. A separate `sync.db` stores synchronization mappings, device state and unresolved conflicts.
 
 The cloud backend uses Supabase Auth and the Supabase Data REST API. The production Project URL and publishable key are bundled with the application, so end users only need to choose Discord login. Run `supabase/schema.sql` once on the production backend. Never use a secret/service-role key in the desktop client.
 
 The application signs users in through Discord OAuth in the default browser, refreshes the resulting Supabase session, and synchronizes manually or on a configurable periodic interval. A local edit never starts network synchronization immediately. It is committed to SQLite first and queued in `sync.db`. Subsequent passes scan only locally changed databases and request remote rows from the stored `updated_at` cursor. If the same record changed on both sides, the current local SQLite row wins. Legacy unresolved conflicts remain visible for compatibility.
 
-See `supabase/README.md` for setup instructions. Discord passwords never reach Sesyjka. Authentication takes place in the default browser using OAuth PKCE. The refresh token is stored in the user configuration directory with file mode `0600`, but version 0.9.13 does not encrypt that file itself.
+See `supabase/README.md` for setup instructions. Discord passwords never reach Sesyjka. Authentication takes place in the default browser using OAuth PKCE. The refresh token is stored in the user configuration directory with file mode `0600`, but version 0.9.17 does not encrypt that file itself.
 
 
 ## Digital resources in 0.9.4
@@ -23,7 +23,27 @@ Version 0.9.4 adds a separate `zasoby.db` library for PDFs, VTT content and web 
 
 The PDF scanner recursively indexes files, calculates SHA-256 and only auto-links a file to an RPG item at high confidence. The DriveThruRPG integration is experimental: an Application Key with My Library Access can import purchase/file metadata and product links without automatically downloading large PDFs. The key stays local with mode `0600`.
 
-## Changes in 0.9.13
+## Changes in 0.9.17
+
+- `Group` RPG items now contain and edit only name, type and RPG system assignment
+- on first 0.9.17 startup, legacy metadata stored on group rows is removed from `systemy_rpg.db` after an automatic safety backup
+- Cloud sync sanitizes legacy group payloads so older remote data cannot restore removed metadata
+- the collection-value chart now aggregates RPG item value by RPG system rather than by individual title
+
+## Changes in 0.9.16
+
+- all summary cards, including collection value, stay in a single row
+- Statistics now has two subtabs: `Charts` and `Sessions and players`, keeping the pie chart fully visible below the cards
+- the collection-value card opens a value-by-title chart with currency-aware formatting and no cross-currency summation
+- present `Physical`, `PDF` and `VTT` format markers use a stronger filled success indicator for better contrast
+
+## Changes in 0.9.15
+
+- fixed pie chart rendering in Statistics. The previous implementation used Cairo method names that do not exist in the Python API, so the legend was visible while the chart itself was blank
+- RPG system group counts now use the intended Polish forms for one, two to four, and five or more items
+- the `Physical`, `PDF` and `VTT` columns in the RPG Systems table now use graphical present/absent indicators instead of textual `Tak` values
+
+## Changes in 0.9.14
 
 - digital resource locations beginning with `https://` or `http://` are displayed as clickable links in the editor and open in the default browser
 - local, NAS and USB file locations remain plain text

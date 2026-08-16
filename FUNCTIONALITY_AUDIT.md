@@ -4,7 +4,7 @@ Punktem odniesienia są `CLAUDE.MD` i sekcja funkcjonalności oraz changelogu z 
 
 ## Funkcje pokryte
 
-| Obszar źródłowy | Stan portu GTK4 0.9.13 |
+| Obszar źródłowy | Stan portu GTK4 0.9.17 |
 |---|---|
 | Cztery oddzielne bazy SQLite projektu źródłowego | Zachowane bez dodawania tabel planszówkowych: systemy, sesje, gracze i wydawcy |
 | Osobna kolekcja planszówek i karcianek | Dodana w niezależnym pliku `planszowe.db`, bez zmiany czterech baz źródłowych |
@@ -48,9 +48,9 @@ Punktem odniesienia są `CLAUDE.MD` i sekcja funkcjonalności oraz changelogu z 
 
 ## Wnioski
 
-Wersja 0.9.13 nie manipuluje prywatnymi widgetami wierszy Gtk.ColumnView. Port zachowuje podstawowy przepływ pracy programu źródłowego: katalog kolekcji RPG, sesje, gracze, wydawcy, statystyki, filtry, transfer i bezpieczeństwo czterech baz. Wersja 0.9.13 obejmuje kolekcję planszówek i karcianek jako niezależne rozszerzenie w piątym pliku. Nie zmienia schematów czterech baz projektu źródłowego. Sesyjka Cloud dodaje wyłącznie osobną bazę `sync.db` z metadanymi synchronizacji, kolejką zmienionych baz i zgodnością ze starszymi konfliktami.
+Wersja 0.9.17 nie manipuluje prywatnymi widgetami wierszy Gtk.ColumnView. Port zachowuje podstawowy przepływ pracy programu źródłowego: katalog kolekcji RPG, sesje, gracze, wydawcy, statystyki, filtry, transfer i bezpieczeństwo czterech baz. Wersja 0.9.17 obejmuje kolekcję planszówek i karcianek jako niezależne rozszerzenie w piątym pliku. Nie zmienia schematów czterech baz projektu źródłowego. Sesyjka Cloud dodaje wyłącznie osobną bazę `sync.db` z metadanymi synchronizacji, kolejką zmienionych baz i zgodnością ze starszymi konfliktami.
 
 
-## Zasoby cyfrowe 0.9.13
+## Zasoby cyfrowe 0.9.17
 
 Dodano niezależną bazę `zasoby.db` z zasobami, lokalizacjami i mapowaniami magazynów. Cztery bazy upstream pozostają niezmienione. Cloud synchronizuje tabele `zasoby` i `lokalizacje`, ale nie `magazyny`, ponieważ ścieżki montowania są właściwością urządzenia.

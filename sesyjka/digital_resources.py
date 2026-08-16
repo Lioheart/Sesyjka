@@ -19,7 +19,7 @@ DTRPG_API_BASE = "https://api.drivethrurpg.com/api"
 DTRPG_API_VERSION = "vBeta"
 DTRPG_ACCOUNT_URL = "https://www.drivethrurpg.com/account.php"
 DTRPG_LIBRARY_URL = "https://www.drivethrurpg.com/en/mylibrary"
-DTRPG_USER_AGENT = "Sesyjka/0.9.13 (+https://github.com/Lioheart/Sesyjka)"
+DTRPG_USER_AGENT = "Sesyjka/0.9.17 (+https://github.com/Lioheart/Sesyjka)"
 
 
 class DigitalResourceError(RuntimeError):

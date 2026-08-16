@@ -79,6 +79,28 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="0.9.17" date="2026-08-16">
+      <description>
+        <p>RPG groups now store only their organizational fields, legacy group metadata is safely migrated away, and collection value is charted by RPG system.</p>
+        <p xml:lang="pl">Grupy RPG przechowują tylko dane organizacyjne, stare metadane grup są bezpiecznie czyszczone, a wartość pozycji jest prezentowana według systemu RPG.</p>
+      </description>
+    </release>
+    <release version="0.9.16" date="2026-08-16">
+      <description>
+        <p>Statistics now uses separate chart and session/player subtabs, keeps all summary cards in one row, adds a currency-aware collection-value chart, and improves format-indicator contrast.</p>
+        <p xml:lang="pl">Statystyki mają osobne podzakładki wykresów oraz sesji i graczy, wszystkie kafelki mieszczą się w jednym wierszu, dodano wykres wartości pozycji z obsługą waluty oraz wyraźniejsze znaczniki formatów.</p>
+      </description>
+    </release>
+    <release version="0.9.15" date="2026-08-16">
+      <description>
+        <p>Naprawiono wykres kołowy statystyk oraz poprawiono odmianę liczby pozycji i graficzne znaczniki formatów Fiz., PDF i VTT.</p>
+      </description>
+    </release>
+    <release version="0.9.14" date="2026-08-16">
+      <description>
+        <p>Zakładka Statystyki używa teraz natywnego wykresu kołowego z legendą, procentami i grupowaniem mniejszych kategorii.</p>
+      </description>
+    </release>
     <release version="0.9.13" date="2026-08-16">
       <description>
         <p>Web locations in the digital resource editor are now clickable links that open in the default browser, while local file locations remain plain text.</p>

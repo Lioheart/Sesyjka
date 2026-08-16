@@ -369,6 +369,12 @@ class Repository:
             raise ValueError("Przypisz pozycję do istniejącego systemu RPG.")
         normalized["system_gry_id"] = int(game_system_id)
 
+        # Dla grup wydawca i pozostałe metadane nie są częścią modelu.
+        # Ignorujemy więc nawet stare lub nieaktualne identyfikatory wydawcy
+        # zamiast blokować zapis kontenera organizacyjnego.
+        if item_type == "Grupa":
+            normalized["wydawca_id"] = None
+
         publisher_id = normalized.get("wydawca_id")
         if publisher_id is not None:
             valid_publishers = {int(item["id"]) for item in self.publishers()}
@@ -438,6 +444,35 @@ class Repository:
             normalized["system_glowny_id"] = parent_id
         else:
             normalized["system_glowny_id"] = None
+
+        if item_type == "Grupa":
+            # Grupa jest rekordem organizacyjnym. Jedynymi danymi domenowymi
+            # są nazwa, typ oraz przypisanie do systemu RPG. Czyścimy wszystkie
+            # pozostałe pola także przy edycji istniejącego rekordu.
+            normalized.update(
+                {
+                    "system_glowny_id": None,
+                    "typ_suplementu": None,
+                    "wydawca_id": None,
+                    "fizyczny": False,
+                    "pdf": False,
+                    "jezyk": None,
+                    "status_gra": None,
+                    "status_kolekcja": None,
+                    "cena_zakupu": None,
+                    "waluta_zakupu": None,
+                    "cena_sprzedazy": None,
+                    "waluta_sprzedazy": None,
+                    "vtt": None,
+                    "system_glowny_nazwa_custom": None,
+                    "cena_fiz": None,
+                    "cena_pdf": None,
+                    "cena_vtt": None,
+                    "rok_wydania": None,
+                    "isbn": None,
+                }
+            )
+
         for key in ("fizyczny", "pdf"):
             normalized[key] = int(bool(normalized.get(key)))
         normalized["vtt"] = _clean(normalized.get("vtt"))
@@ -1501,23 +1536,42 @@ class Repository:
         )
 
         value_by_currency: dict[str, Decimal] = {}
+        rpg_value_by_currency_and_system: dict[str, dict[str, Decimal]] = {}
 
-        def add_value(value: Any, currency: Any) -> None:
+        def parsed_value(value: Any, currency: Any) -> tuple[Decimal, str] | None:
             if value in (None, ""):
-                return
+                return None
             try:
                 parsed = Decimal(str(value).strip().replace(",", "."))
             except (InvalidOperation, ValueError):
-                return
+                return None
             if parsed <= 0:
-                return
+                return None
             code = str(currency or "PLN").strip().upper() or "PLN"
-            value_by_currency[code] = value_by_currency.get(code, Decimal("0")) + parsed
+            return parsed, code
+
+        def add_total_value(value: Any, currency: Any) -> tuple[Decimal, str] | None:
+            parsed = parsed_value(value, currency)
+            if parsed is None:
+                return None
+            amount, code = parsed
+            value_by_currency[code] = value_by_currency.get(code, Decimal("0")) + amount
+            return amount, code
 
         for item in systems:
-            add_value(item.get("cena_zakupu"), item.get("waluta_zakupu"))
+            parsed = add_total_value(item.get("cena_zakupu"), item.get("waluta_zakupu"))
+            if parsed is None:
+                continue
+            amount, code = parsed
+            system_name = str(item.get("system_gry_nazwa") or "Bez systemu")
+            currency_systems = rpg_value_by_currency_and_system.setdefault(code, {})
+            currency_systems[system_name] = currency_systems.get(system_name, Decimal("0")) + amount
+
         for item in board_games:
-            add_value(item.get("cena"), item.get("waluta"))
+            # Planszówki i karcianki pozostają częścią łącznej wartości widocznej
+            # w kafelku. Wykres wartości dotyczy jednak wyłącznie pozycji RPG
+            # i grupuje je według systemu RPG.
+            add_total_value(item.get("cena"), item.get("waluta"))
 
         def format_currency(value: Decimal, currency: str) -> str:
             amount = f"{value:,.2f}".replace(",", " ").replace(".", ",")
@@ -1527,6 +1581,30 @@ class Repository:
             format_currency(value, currency)
             for currency, value in sorted(value_by_currency.items())
         ) or "0,00 PLN"
+
+        value_chart_currency = (
+            "PLN" if "PLN" in rpg_value_by_currency_and_system
+            else sorted(rpg_value_by_currency_and_system)[0]
+            if rpg_value_by_currency_and_system
+            else "PLN"
+        )
+        value_chart_items = sorted(
+            rpg_value_by_currency_and_system.get(value_chart_currency, {}).items(),
+            key=lambda item: (-item[1], item[0].casefold()),
+        )
+        value_chart_note = ""
+        notes: list[str] = []
+        if len(rpg_value_by_currency_and_system) > 1:
+            notes.append(
+                f"Wykres pokazuje wartości pozycji RPG w {value_chart_currency}. "
+                "Pozostałe waluty są widoczne w kafelku wartości."
+            )
+        if any(parsed_value(item.get("cena"), item.get("waluta")) for item in board_games):
+            notes.append(
+                "Wartość planszówek i karcianek jest uwzględniona w kafelku, "
+                "ale nie na wykresie według systemu RPG."
+            )
+        value_chart_note = " ".join(notes)
 
         counts = {
             "Pozycje RPG": len(systems),
@@ -1576,6 +1654,13 @@ class Repository:
             "Zasoby cyfrowe": {
                 "title": "Zasoby cyfrowe według typu",
                 "items": sorted_counter(Counter(str(item.get("typ") or "Inne") for item in digital_resources)),
+            },
+            "Wartość pozycji": {
+                "title": f"Wartość pozycji RPG według systemu ({value_chart_currency})",
+                "items": value_chart_items,
+                "unit": value_chart_currency,
+                "decimals": 2,
+                "note": value_chart_note,
             },
         }
         return {
