@@ -291,6 +291,110 @@ class DigitalResourceTests(unittest.TestCase):
         self.assertEqual(item.resource_type, "PDF")
         self.assertEqual(item.product_url, "https://www.drivethrurpg.com/en/product/456")
 
+    def test_drivethru_multifile_product_uses_file_titles(self) -> None:
+        client = DriveThruRPGClient("key")
+        payload = [
+            {
+                "productId": "456",
+                "publisher": {"name": "Gry Fabularne"},
+                "name": "Armie Apokalipsy",
+                "orderProductId": 123,
+                "files": [
+                    {
+                        "index": 0,
+                        "filename": "galeria_bohaterow.pdf",
+                        "title": "Galeria Bohaterów Niezależnych",
+                        "size": 1024,
+                    },
+                    {
+                        "index": 1,
+                        "filename": "Armie_Apokalipsy_-_Edycja_Rozszerzona.pdf",
+                        "size": 2048,
+                    },
+                ],
+            }
+        ]
+        parsed = client._parse_page(payload)
+        self.assertEqual(
+            [item.title for item in parsed],
+            ["Galeria Bohaterów Niezależnych", "Armie Apokalipsy - Edycja Rozszerzona"],
+        )
+        self.assertEqual([item.product_title for item in parsed], ["Armie Apokalipsy"] * 2)
+
+    def test_drivethru_jsonapi_multifile_product_uses_file_titles(self) -> None:
+        client = DriveThruRPGClient("key")
+        payload = {
+            "data": [
+                {
+                    "id": "123",
+                    "attributes": {
+                        "orderProductId": 123,
+                        "productId": 456,
+                        "name": "Armie Apokalipsy",
+                        "files": [
+                            {
+                                "index": 0,
+                                "filename": "karta_grzechow.pdf",
+                                "title": "Karta Grzechów",
+                            },
+                            {
+                                "index": 1,
+                                "filename": "Karta_Postaci.pdf",
+                            },
+                        ],
+                    },
+                }
+            ]
+        }
+        parsed = client._parse_page(payload)
+        self.assertEqual([item.title for item in parsed], ["Karta Grzechów", "Karta Postaci"])
+        self.assertEqual([item.product_title for item in parsed], ["Armie Apokalipsy"] * 2)
+
+    def test_drivethru_single_file_product_keeps_product_title(self) -> None:
+        client = DriveThruRPGClient("key")
+        payload = [
+            {
+                "productId": "456",
+                "name": "Player Core",
+                "orderProductId": 123,
+                "files": [
+                    {
+                        "index": 0,
+                        "filename": "PF2E_Player_Core_2026.pdf",
+                        "title": "Technical download label",
+                    }
+                ],
+            }
+        ]
+        parsed = client._parse_page(payload)
+        self.assertEqual(len(parsed), 1)
+        self.assertEqual(parsed[0].title, "Player Core")
+        self.assertEqual(parsed[0].product_title, "Player Core")
+
+    def test_drivethru_multifile_resource_still_matches_collection_by_product_title(self) -> None:
+        item = DriveThruLibraryItem(
+            external_id="dtrpg:123:1",
+            order_product_id=123,
+            product_id=456,
+            file_index=1,
+            title="Character Sheet",
+            filename="character_sheet.pdf",
+            size=200,
+            sha256="",
+            isbn="",
+            publisher="Paizo",
+            product_url="https://www.drivethrurpg.com/en/product/456",
+            resource_type="PDF",
+            format_name="PDF",
+            date_purchased="",
+            product_title="Player Core",
+        )
+        report = self.repo.import_drivethru_library([item])
+        self.assertEqual(report["linked"], 1)
+        resource = self.repo.digital_resources()[0]
+        self.assertEqual(resource["nazwa"], "Character Sheet")
+        self.assertEqual(resource["pozycja_rpg_id"], self.position_id)
+
     def test_drivethru_library_paginates_current_list_until_empty_page(self) -> None:
         client = DriveThruRPGClient("key")
         pages = [

@@ -1282,7 +1282,10 @@ class Repository:
                 isbn = re.sub(r"[^0-9Xx]", "", str(entry.isbn or "")).upper()
                 position_id = by_isbn.get(isbn) if isbn else None
                 if position_id is None:
-                    position_id, _confidence = match_rpg_item(entry.title or entry.filename, systems)
+                    match_source = entry.product_title or entry.title or entry.filename
+                    position_id, _confidence = match_rpg_item(match_source, systems)
+                    if position_id is None and entry.product_title and entry.title != entry.product_title:
+                        position_id, _confidence = match_rpg_item(entry.title or entry.filename, systems)
                 existing = connection.execute(
                     "SELECT id, pozycja_rpg_id FROM zasoby WHERE external_id=?",
                     (entry.external_id,),

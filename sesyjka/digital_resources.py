@@ -19,7 +19,7 @@ DTRPG_API_BASE = "https://api.drivethrurpg.com/api"
 DTRPG_API_VERSION = "vBeta"
 DTRPG_ACCOUNT_URL = "https://www.drivethrurpg.com/account.php"
 DTRPG_LIBRARY_URL = "https://www.drivethrurpg.com/en/mylibrary"
-DTRPG_USER_AGENT = "Sesyjka/0.9.7 (+https://github.com/Lioheart/Sesyjka)"
+DTRPG_USER_AGENT = "Sesyjka/0.9.8 (+https://github.com/Lioheart/Sesyjka)"
 
 
 class DigitalResourceError(RuntimeError):
@@ -66,6 +66,7 @@ class DriveThruLibraryItem:
     resource_type: str
     format_name: str
     date_purchased: str
+    product_title: str = ""
 
 
 def normalize_text(value: str) -> str:
@@ -455,6 +456,7 @@ class DriveThruRPGClient:
         sha256: str = "",
         isbn: str = "",
         date_purchased: str = "",
+        product_title: str = "",
     ) -> DriveThruLibraryItem:
         resource_type, format_name = self._resource_type(filename) if filename else ("WWW", "DriveThruRPG")
         product_url = (
@@ -478,7 +480,26 @@ class DriveThruRPGClient:
             resource_type=resource_type,
             format_name=format_name,
             date_purchased=date_purchased,
+            product_title=product_title or title,
         )
+
+    @staticmethod
+    def _file_display_title(file_info: dict[str, Any], filename: str, product_title: str) -> str:
+        """Zwróć nazwę konkretnego pliku zamiast nazwy całego produktu.
+
+        DriveThruRPG może podawać przy pliku przyjazną nazwę niezależną od
+        technicznej nazwy pliku. Jeżeli jej nie ma, używamy nazwy pliku bez
+        rozszerzenia. Nazwa produktu pozostaje ostatecznym fallbackiem.
+        """
+        for key in ("title", "name", "displayName", "label"):
+            value = str(file_info.get(key) or "").strip()
+            if value:
+                return value
+        stem = Path(filename).stem.strip()
+        if stem:
+            stem = re.sub(r"_+", " ", stem)
+            return " ".join(stem.split())
+        return product_title
 
     def _parse_current_product_list(self, payload: list[Any]) -> list[DriveThruLibraryItem]:
         """Parsuj bieżący format ``order_products`` używany przez Library App.
@@ -518,9 +539,11 @@ class DriveThruRPGClient:
                         publisher=publisher,
                         isbn=isbn,
                         date_purchased=date_purchased,
+                        product_title=title,
                     )
                 )
                 continue
+            multiple_files = sum(isinstance(file_info, dict) for file_info in files) > 1
             for position, file_info in enumerate(files):
                 if not isinstance(file_info, dict):
                     continue
@@ -530,18 +553,24 @@ class DriveThruRPGClient:
                     index = position
                 filename = str(file_info.get("filename") or file_info.get("title") or "").strip()
                 size = self._safe_int(file_info.get("size"))
+                resource_title = (
+                    self._file_display_title(file_info, filename, title)
+                    if multiple_files
+                    else title
+                )
                 result.append(
                     self._make_item(
                         order_product_id=order_product_id,
                         product_id=product_id,
                         file_index=index,
-                        title=title,
+                        title=resource_title,
                         publisher=publisher,
                         filename=filename,
                         size=size,
                         sha256=self._checksum(file_info),
                         isbn=isbn,
                         date_purchased=date_purchased,
+                        product_title=title,
                     )
                 )
         return result
@@ -591,9 +620,11 @@ class DriveThruRPGClient:
                         size=self._safe_int(attrs.get("filesize")),
                         isbn=isbn,
                         date_purchased=str(attrs.get("datePurchased") or ""),
+                        product_title=title,
                     )
                 )
                 continue
+            multiple_files = sum(isinstance(file_info, dict) for file_info in files) > 1
             for position, file_info in enumerate(files):
                 if not isinstance(file_info, dict):
                     continue
@@ -602,18 +633,24 @@ class DriveThruRPGClient:
                 except (TypeError, ValueError):
                     index = position
                 filename = str(file_info.get("filename") or file_info.get("title") or "").strip()
+                resource_title = (
+                    self._file_display_title(file_info, filename, title)
+                    if multiple_files
+                    else title
+                )
                 result.append(
                     self._make_item(
                         order_product_id=order_product_id,
                         product_id=product_id,
                         file_index=index,
-                        title=title,
+                        title=resource_title,
                         publisher=publisher,
                         filename=filename,
                         size=self._safe_int(file_info.get("size")),
                         sha256=self._checksum(file_info),
                         isbn=isbn,
                         date_purchased=str(attrs.get("datePurchased") or ""),
+                        product_title=title,
                     )
                 )
         return result

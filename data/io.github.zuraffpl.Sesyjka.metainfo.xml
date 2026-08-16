@@ -79,6 +79,12 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="0.9.8" date="2026-08-15">
+      <description>
+        <p>DriveThruRPG products with multiple downloads now create resources named after each specific file while retaining the product title separately for collection matching.</p>
+        <p xml:lang="pl">Produkty DriveThruRPG z wieloma plikami tworzą teraz zasoby nazwane według konkretnego pliku, a nazwa produktu jest zachowywana osobno do dopasowania z kolekcją RPG.</p>
+      </description>
+    </release>
     <release version="0.9.7" date="2026-08-15">
       <description>
         <p>Fixed DriveThruRPG JWT authorization to match the current SDK, retained a Bearer compatibility retry, aligned auth_key request body semantics, and separated Application Key errors from session-token errors.</p>

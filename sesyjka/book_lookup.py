@@ -13,7 +13,7 @@ from urllib.request import Request, urlopen
 
 from .config import cache_dir
 
-USER_AGENT = "Sesyjka/0.9.7 (+https://github.com/Lioheart/Sesyjka)"
+USER_AGENT = "Sesyjka/0.9.8 (+https://github.com/Lioheart/Sesyjka)"
 BN_SEARCH = "https://data.bn.org.pl/api/institutions/bibs.json"
 BN_NETWORK_SEARCH = "https://data.bn.org.pl/api/networks/bibs.json"
 OPEN_LIBRARY_SEARCH = "https://openlibrary.org/search.json"
