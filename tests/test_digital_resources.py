@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import gzip
+import io
 import json
 import zlib
 import os
 import tempfile
 import unittest
+import urllib.error
 from pathlib import Path
 from unittest import mock
 
@@ -15,6 +17,7 @@ from sesyjka.digital_resources import (
     DriveThruKeyStore,
     DriveThruLibraryItem,
     DriveThruRPGClient,
+    DriveThruRPGError,
     match_rpg_item,
     scan_pdf_directory,
 )
@@ -141,7 +144,7 @@ class DigitalResourceTests(unittest.TestCase):
         self.assertIn("application_key", json.loads(path.read_text()))
 
 
-    def test_drivethru_http_gzip_is_decoded_and_bearer_token_is_used(self) -> None:
+    def test_drivethru_http_gzip_is_decoded_and_raw_jwt_is_used(self) -> None:
         client = DriveThruRPGClient("key")
         raw = json.dumps({"ok": True}).encode("utf-8")
         response = mock.MagicMock()
@@ -153,8 +156,70 @@ class DigitalResourceTests(unittest.TestCase):
             payload = client._request_json("https://api.example.test", token="jwt-token")
         self.assertEqual(payload, {"ok": True})
         request = urlopen.call_args.args[0]
-        self.assertEqual(request.get_header("Authorization"), "Bearer jwt-token")
+        self.assertEqual(request.get_header("Authorization"), "jwt-token")
         self.assertEqual(request.get_header("Accept-encoding"), "identity")
+
+    def test_drivethru_authentication_posts_empty_json_body(self) -> None:
+        client = DriveThruRPGClient("test key")
+        with mock.patch.object(
+            client, "_request_json", return_value={"token": "jwt", "refreshToken": "r", "refreshTokenTTL": 1}
+        ) as request:
+            token = client.authenticate()
+        self.assertEqual(token, "jwt")
+        url = request.call_args.args[0]
+        self.assertIn("/vBeta/auth_key?", url)
+        self.assertIn("applicationKey=test+key", url)
+        self.assertEqual(request.call_args.kwargs["method"], "POST")
+        self.assertEqual(request.call_args.kwargs["body"], b"{}")
+
+    def test_drivethru_library_prefers_raw_jwt_and_falls_back_to_bearer_once(self) -> None:
+        client = DriveThruRPGClient("key")
+        rejected = DriveThruRPGError(
+            "raw rejected", status_code=401, detail='{"message":"Invalid JWT Token"}'
+        )
+        with mock.patch.object(
+            client, "_request_json", side_effect=[rejected, {"data": [], "links": {"next": None}}]
+        ) as request:
+            payload = client._request_library_page("https://api.example.test/library", "jwt-token")
+        self.assertEqual(payload["data"], [])
+        self.assertEqual(request.call_count, 2)
+        self.assertEqual(request.call_args_list[0].kwargs, {"token": "jwt-token"})
+        self.assertEqual(
+            request.call_args_list[1].kwargs, {"token": "jwt-token", "bearer": True}
+        )
+
+    def test_drivethru_library_401_does_not_claim_application_key_is_invalid(self) -> None:
+        client = DriveThruRPGClient("key")
+        error = urllib.error.HTTPError(
+            "https://api.drivethrurpg.com/api/vBeta/order_products",
+            401,
+            "Unauthorized",
+            {},
+            io.BytesIO(b'{"code":401,"message":"Invalid JWT Token"}'),
+        )
+        with mock.patch("urllib.request.urlopen", side_effect=error):
+            with self.assertRaises(DriveThruRPGError) as caught:
+                client._request_json(
+                    "https://api.drivethrurpg.com/api/vBeta/order_products", token="jwt-token"
+                )
+        self.assertEqual(caught.exception.status_code, 401)
+        self.assertIn("token sesji JWT", str(caught.exception))
+        self.assertNotIn("odrzucił Application Key", str(caught.exception))
+
+    def test_drivethru_auth_401_is_reported_as_application_key_error(self) -> None:
+        client = DriveThruRPGClient("key")
+        error = urllib.error.HTTPError(
+            "https://api.drivethrurpg.com/api/vBeta/auth_key?applicationKey=key",
+            401,
+            "Unauthorized",
+            {},
+            io.BytesIO(b'{"errorCode":"invalid_application_key"}'),
+        )
+        with mock.patch("urllib.request.urlopen", side_effect=error):
+            with self.assertRaises(DriveThruRPGError) as caught:
+                client.authenticate()
+        self.assertEqual(caught.exception.status_code, 401)
+        self.assertIn("odrzucił Application Key", str(caught.exception))
 
     def test_drivethru_content_decoder_supports_gzip_magic_and_deflate(self) -> None:
         client = DriveThruRPGClient("key")

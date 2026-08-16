@@ -19,7 +19,7 @@ DTRPG_API_BASE = "https://api.drivethrurpg.com/api"
 DTRPG_API_VERSION = "vBeta"
 DTRPG_ACCOUNT_URL = "https://www.drivethrurpg.com/account.php"
 DTRPG_LIBRARY_URL = "https://www.drivethrurpg.com/en/mylibrary"
-DTRPG_USER_AGENT = "Sesyjka/0.9.6 (+https://github.com/Lioheart/Sesyjka)"
+DTRPG_USER_AGENT = "Sesyjka/0.9.7 (+https://github.com/Lioheart/Sesyjka)"
 
 
 class DigitalResourceError(RuntimeError):
@@ -27,7 +27,16 @@ class DigitalResourceError(RuntimeError):
 
 
 class DriveThruRPGError(DigitalResourceError):
-    pass
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int | None = None,
+        detail: str = "",
+    ) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.detail = detail
 
 
 @dataclass(frozen=True)
@@ -208,6 +217,7 @@ class DriveThruRPGClient:
         method: str = "GET",
         token: str = "",
         body: bytes | None = None,
+        bearer: bool = False,
     ) -> Any:
         headers = {
             "User-Agent": DTRPG_USER_AGENT,
@@ -218,8 +228,10 @@ class DriveThruRPGClient:
             "Accept-Encoding": "identity",
         }
         if token:
-            # auth_key zwraca JWT. Kolejne wywołania API wymagają schematu Bearer.
-            headers["Authorization"] = f"Bearer {token}"
+            # Bieżący oficjalny SDK DriveThruRPG wysyła surowy JWT bez prefiksu
+            # ``Bearer``. Specyfikacja OpenAPI nadal opisuje Bearer, dlatego
+            # ``library()`` ma jednokrotny fallback kompatybilnościowy.
+            headers["Authorization"] = f"Bearer {token}" if bearer else token
         if body is not None:
             headers["Content-Type"] = "application/json"
         request = urllib.request.Request(url, data=body, method=method, headers=headers)
@@ -237,14 +249,36 @@ class DriveThruRPGClient:
             except DriveThruRPGError:
                 pass
             detail = error_payload.decode("utf-8", "replace")[:1000]
-            if exc.code in {401, 403}:
+            is_auth_key_request = "/auth_key" in urllib.parse.urlsplit(url).path
+            if is_auth_key_request and exc.code in {401, 403}:
                 raise DriveThruRPGError(
                     "DriveThruRPG odrzucił Application Key. Sprawdź, czy klucz jest "
                     "aktualny i czy ma włączone My Library Access. "
-                    f"HTTP {exc.code}. {detail}".strip()
+                    f"HTTP {exc.code}. {detail}".strip(),
+                    status_code=exc.code,
+                    detail=detail,
+                ) from exc
+            if token and exc.code == 401:
+                raise DriveThruRPGError(
+                    "DriveThruRPG odrzucił token sesji JWT uzyskany z poprawnie "
+                    "wywołanego endpointu auth_key. To nie oznacza automatycznie, "
+                    "że Application Key jest błędny. "
+                    f"HTTP 401. {detail}".strip(),
+                    status_code=exc.code,
+                    detail=detail,
+                ) from exc
+            if token and exc.code == 403:
+                raise DriveThruRPGError(
+                    "DriveThruRPG odmówił dostępu do biblioteki dla bieżącej sesji. "
+                    "Sprawdź, czy Application Key ma włączone My Library Access. "
+                    f"HTTP 403. {detail}".strip(),
+                    status_code=exc.code,
+                    detail=detail,
                 ) from exc
             raise DriveThruRPGError(
-                f"DriveThruRPG zwrócił HTTP {exc.code}. {detail}".strip()
+                f"DriveThruRPG zwrócił HTTP {exc.code}. {detail}".strip(),
+                status_code=exc.code,
+                detail=detail,
             ) from exc
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             raise DriveThruRPGError(f"Nie można połączyć z DriveThruRPG: {exc}") from exc
@@ -288,7 +322,9 @@ class DriveThruRPGClient:
     def authenticate(self) -> str:
         query = urllib.parse.urlencode({"applicationKey": self.application_key})
         url = f"{DTRPG_API_BASE}/{DTRPG_API_VERSION}/auth_key?{query}"
-        payload = self._request_json(url, method="POST")
+        # Aktualny SDK wysyła pusty obiekt JSON. Sam POST bez body nie jest
+        # równoważny na wszystkich warstwach proxy/CDN.
+        payload = self._request_json(url, method="POST", body=b"{}")
         if not isinstance(payload, dict):
             raise DriveThruRPGError(
                 "DriveThruRPG zwrócił nieoczekiwany format odpowiedzi podczas uwierzytelniania."
@@ -302,6 +338,35 @@ class DriveThruRPGClient:
                 + str(state)
             )
         return token
+
+    def _request_library_page(self, url: str, token: str) -> Any:
+        """Pobierz stronę biblioteki z kompatybilnością wariantów Authorization.
+
+        Bieżący Python SDK DriveThruRPG używa surowego JWT jako wartości
+        ``Authorization``. Część opisu OpenAPI nadal wskazuje schemat Bearer.
+        Najpierw używamy zachowania SDK. Jeżeli serwer odpowie 401, wykonujemy
+        dokładnie jedną próbę zgodną ze starszą interpretacją OpenAPI.
+        """
+        try:
+            return self._request_json(url, token=token)
+        except DriveThruRPGError as raw_error:
+            if raw_error.status_code != 401:
+                raise
+
+        try:
+            return self._request_json(url, token=token, bearer=True)
+        except DriveThruRPGError as bearer_error:
+            if bearer_error.status_code == 401:
+                raise DriveThruRPGError(
+                    "DriveThruRPG odrzucił token JWT zarówno w formacie używanym przez "
+                    "bieżący SDK, jak i z prefiksem Bearer. Application Key został "
+                    "wcześniej wymieniony na token, więc błąd dotyczy sesji lub sposobu "
+                    "autoryzacji biblioteki. "
+                    f"HTTP 401. {bearer_error.detail}".strip(),
+                    status_code=401,
+                    detail=bearer_error.detail,
+                ) from bearer_error
+            raise
 
     @staticmethod
     def _safe_int(value: Any) -> int | None:
@@ -584,7 +649,7 @@ class DriveThruRPGClient:
                 }
             )
             url = f"{DTRPG_API_BASE}/{DTRPG_API_VERSION}/order_products?{query}"
-            payload = self._request_json(url, token=token)
+            payload = self._request_library_page(url, token)
             parsed = self._parse_page(payload)
 
             if isinstance(payload, list) and not payload:

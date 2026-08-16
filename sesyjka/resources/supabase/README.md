@@ -1,4 +1,4 @@
-# Sesyjka Cloud 0.9.6 - konfiguracja Supabase i Discord
+# Sesyjka Cloud 0.9.7 - konfiguracja Supabase i Discord
 
 Konfigurację wykonuje administrator projektu Sesyjka tylko raz. Użytkownik końcowy loguje się przyciskiem `Zaloguj przez Discord` i nie wykonuje żadnego SQL ani nie konfiguruje Discord Developer Portal.
 
@@ -79,7 +79,7 @@ NOTIFY pgrst, 'reload schema';
 
 ## 6. Konfiguracja klienta
 
-Produkcja 0.9.6 ma zapisane w aplikacji:
+Produkcja 0.9.7 ma zapisane w aplikacji:
 
 ```text
 SUPABASE_URL=https://rjevhlnscdodgoaztxao.supabase.co

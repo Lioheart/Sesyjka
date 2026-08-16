@@ -1110,6 +1110,8 @@ class SesyjkaWindow(Adw.ApplicationWindow):
     def show_history(self) -> None:
         dialog = ModalWindow(self, "Historia zmian", width=720, height=620)
         history_text = (
+            "0.9.7\n"
+            "Naprawiono uwierzytelnianie DriveThruRPG. Sesyjka używa teraz surowego JWT w nagłówku Authorization zgodnie z bieżącym SDK, zachowuje pojedynczy fallback Bearer, wysyła pusty obiekt JSON do auth_key i rozróżnia błędy Application Key od błędów tokenu sesji.\n\n"
             "0.9.6\n"
             "Naprawiono synchronizację DriveThruRPG: odpowiedzi gzip/deflate są poprawnie rozpakowywane, token JWT jest wysyłany jako Bearer, a parser order_products obsługuje paginowany format JSON:API wraz z dołączonym wydawcą.\n\n"
             "0.9.4\n"
