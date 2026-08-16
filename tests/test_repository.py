@@ -542,6 +542,41 @@ class RepositoryTests(unittest.TestCase):
             ).fetchone()
         self.assertIsNotNone(table)
 
+    def test_empty_publisher_database_is_recovered_from_backup_when_referenced(self) -> None:
+        publisher_id = self.repository.save_publisher({"nazwa": "Wydawca do odzyskania"})
+        game_system_id = self.repository.save_game_system(
+            {"nazwa": "System", "wydawca_id": publisher_id}
+        )
+        self.repository.save_system(
+            {
+                "nazwa": "Podręcznik",
+                "typ": "Podręcznik główny",
+                "system_gry_id": game_system_id,
+                "wydawca_id": publisher_id,
+            }
+        )
+        backup = self.databases.create_safety_backup("schema-test")
+        with self.databases.connect("wydawcy.db", write=True) as connection:
+            connection.execute("DELETE FROM wydawcy")
+        self.assertEqual(self.repository.publishers(), [])
+
+        recovered = self.databases.recover_empty_publishers_from_backup()
+
+        self.assertEqual(recovered, backup)
+        self.assertEqual(self.repository.publishers()[0]["nazwa"], "Wydawca do odzyskania")
+
+    def test_empty_unreferenced_publisher_database_is_not_recovered(self) -> None:
+        self.repository.save_publisher({"nazwa": "Nie przywracaj automatycznie"})
+        self.databases.create_safety_backup("schema-test")
+        with self.databases.connect("wydawcy.db", write=True) as connection:
+            connection.execute("DELETE FROM wydawcy")
+
+        recovered = self.databases.recover_empty_publishers_from_backup()
+
+        self.assertIsNone(recovered)
+        self.assertEqual(self.repository.publishers(), [])
+
+
     def test_schema_update_creates_backup_before_migration(self) -> None:
         legacy_root = self.root / "legacy"
         legacy_root.mkdir()

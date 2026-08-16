@@ -1110,6 +1110,8 @@ class SesyjkaWindow(Adw.ApplicationWindow):
     def show_history(self) -> None:
         dialog = ModalWindow(self, "Historia zmian", width=720, height=620)
         history_text = (
+            "0.9.10\n"
+            "Naprawiono bezpieczeństwo Sesyjka Cloud. Błąd synchronizacji nie pozostawia już częściowo zmienionych lokalnych baz, ponieważ zmiany z chmury są chronione kopią i automatycznym rollbackiem. Brak wiersza w Supabase nie jest traktowany jako usunięcie bez tombstone. Dodano też odzyskiwanie pustej bazy wydawców z zgodnej kopii zapasowej, gdy kolekcja nadal zawiera odwołania do wydawców.\n\n"
             "0.9.9\n"
             "DriveThruRPG ponownie zachowuje nazwę produktu jako nazwę zasobu. Dodano osobną kolumnę Nazwa pliku z przyjaznym tytułem konkretnego pliku, z fallbackiem do technicznej nazwy. Ponowna synchronizacja aktualizuje rekordy z 0.9.8 i automatycznie rozszerza zasoby.db o nowe pole.\n\n"
             "0.9.8\n"
@@ -1283,6 +1285,7 @@ class SesyjkaApplication(Adw.Application):
             migrated = migrate_legacy_databases()
             try:
                 self.databases.initialize()
+                recovered_publishers = self.databases.recover_empty_publishers_from_backup()
             except Exception as exc:
                 temporary = Adw.ApplicationWindow(application=self, title=APP_NAME)
                 temporary.set_default_size(500, 220)
@@ -1290,7 +1293,17 @@ class SesyjkaApplication(Adw.Application):
                 info(temporary, "Błąd inicjalizacji", str(exc), error=True)
                 return
             self.window = SesyjkaWindow(self, self.databases)
-            if migrated:
+            if recovered_publishers is not None:
+                GLib.idle_add(
+                    lambda: info(
+                        self.window,
+                        "Odzyskano bazę wydawców",
+                        "Wykryto pustą bazę wydawców przy istniejących odwołaniach z kolekcji. "
+                        f"Przywrócono wydawcy.db z kopii: {recovered_publishers}",
+                    )
+                    or False
+                )
+            elif migrated:
                 GLib.idle_add(
                     lambda: info(
                         self.window,

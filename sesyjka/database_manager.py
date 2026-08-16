@@ -193,6 +193,179 @@ class DatabaseManager:
         self._init_board_games()
         self._init_digital_resources()
 
+    def create_safety_backup(
+        self,
+        prefix: str,
+        filenames: Sequence[str] | None = None,
+    ) -> Path:
+        """Create a consistent SQLite backup of selected application databases.
+
+        ``sync.db`` may be included even though it is intentionally excluded from
+        DB_FILES and user export/import. Safety backups are internal and are used
+        to roll back an interrupted cloud synchronization.
+        """
+        allowed = set(DB_FILES) | {"sync.db"}
+        selected = list(filenames or DB_FILES)
+        unknown = [name for name in selected if name not in allowed]
+        if unknown:
+            raise ValueError("Nieznane bazy danych kopii bezpieczeństwa: " + ", ".join(unknown))
+        safe_prefix = "".join(ch for ch in str(prefix) if ch.isalnum() or ch in {"-", "_"}).strip("-_") or "backup"
+        backup = (
+            self._own_root
+            / "backups"
+            / f"{safe_prefix}-{datetime.now().strftime('%Y%m%d-%H%M%S-%f')}"
+        )
+        backup.mkdir(parents=True, exist_ok=False)
+        try:
+            self.extend_safety_backup(backup, selected)
+        except Exception:
+            shutil.rmtree(backup, ignore_errors=True)
+            raise
+        return backup
+
+    def extend_safety_backup(self, backup: Path, filenames: Sequence[str]) -> None:
+        """Add consistent snapshots to an existing internal backup directory."""
+        backup = Path(backup)
+        allowed = set(DB_FILES) | {"sync.db"}
+        unknown = [name for name in filenames if name not in allowed]
+        if unknown:
+            raise ValueError("Nieznane bazy danych kopii bezpieczeństwa: " + ", ".join(unknown))
+        backup.mkdir(parents=True, exist_ok=True)
+        for filename in filenames:
+            source = self._own_root / filename
+            if not source.is_file():
+                continue
+            target = backup / filename
+            temporary = target.with_name(f".{target.name}.backup-{datetime.now().strftime('%H%M%S%f')}")
+            try:
+                with closing(sqlite3.connect(f"file:{source}?mode=ro", uri=True)) as source_db:
+                    with closing(sqlite3.connect(temporary)) as target_db:
+                        source_db.backup(target_db)
+                temporary.replace(target)
+            finally:
+                try:
+                    temporary.unlink()
+                except FileNotFoundError:
+                    pass
+
+    def restore_safety_backup(
+        self,
+        backup: Path,
+        filenames: Sequence[str] | None = None,
+    ) -> None:
+        """Restore selected databases from an internal safety backup.
+
+        Every source database is checked before any live file is replaced. This
+        method must only be called when no write transaction is active.
+        """
+        backup = Path(backup)
+        allowed = set(DB_FILES) | {"sync.db"}
+        selected = list(filenames or [path.name for path in backup.glob("*.db")])
+        selected = [name for name in selected if name in allowed and (backup / name).is_file()]
+        if not selected:
+            raise ValueError("Kopia bezpieczeństwa nie zawiera baz do przywrócenia.")
+
+        for filename in selected:
+            source = backup / filename
+            try:
+                with closing(sqlite3.connect(f"file:{source}?mode=ro", uri=True)) as connection:
+                    check = connection.execute("PRAGMA quick_check").fetchone()
+                    if check is None or str(check[0]).casefold() != "ok":
+                        raise ValueError(f"Kopia bazy {filename} nie przeszła kontroli integralności.")
+            except sqlite3.DatabaseError as exc:
+                raise ValueError(f"Kopia bazy {filename} nie jest poprawną bazą SQLite.") from exc
+
+        staged: dict[str, Path] = {}
+        try:
+            for filename in selected:
+                target = self._own_root / filename
+                temporary = target.with_name(f".{target.name}.restore-{datetime.now().strftime('%H%M%S%f')}")
+                shutil.copy2(backup / filename, temporary)
+                staged[filename] = temporary
+            for filename, temporary in staged.items():
+                temporary.replace(self._own_root / filename)
+        finally:
+            for temporary in staged.values():
+                try:
+                    temporary.unlink()
+                except FileNotFoundError:
+                    pass
+
+    def prune_safety_backups(self, prefix: str, keep: int = 10) -> None:
+        backup_root = self._own_root / "backups"
+        if not backup_root.is_dir():
+            return
+        directories = sorted(
+            (path for path in backup_root.iterdir() if path.is_dir() and path.name.startswith(f"{prefix}-")),
+            key=lambda path: path.stat().st_mtime,
+            reverse=True,
+        )
+        for old in directories[max(0, int(keep)):]:
+            shutil.rmtree(old, ignore_errors=True)
+
+    def recover_empty_publishers_from_backup(self) -> Path | None:
+        """Recover a clearly accidental empty publisher database.
+
+        Recovery is deliberately conservative. It runs only when the current
+        publisher table is empty while other local databases still reference
+        publisher identifiers, and only when a backup contains every referenced
+        identifier. This avoids resurrecting publishers after an intentional
+        cleanup of an otherwise unreferenced database.
+        """
+        publisher_path = self._own_root / "wydawcy.db"
+        if not publisher_path.is_file():
+            return None
+        try:
+            with closing(sqlite3.connect(f"file:{publisher_path}?mode=ro", uri=True)) as connection:
+                row = connection.execute("SELECT COUNT(*) FROM wydawcy").fetchone()
+                if row is None or int(row[0] or 0) != 0:
+                    return None
+        except sqlite3.DatabaseError:
+            return None
+
+        referenced: set[int] = set()
+        queries = (
+            ("systemy_rpg.db", "SELECT wydawca_id FROM systemy_rpg WHERE wydawca_id IS NOT NULL"),
+            ("systemy_rpg.db", "SELECT wydawca_id FROM systemy_gry WHERE wydawca_id IS NOT NULL"),
+            ("planszowe.db", "SELECT wydawca_id FROM planszowe WHERE wydawca_id IS NOT NULL"),
+        )
+        for filename, query in queries:
+            path = self._own_root / filename
+            if not path.is_file():
+                continue
+            try:
+                with closing(sqlite3.connect(f"file:{path}?mode=ro", uri=True)) as connection:
+                    referenced.update(int(row[0]) for row in connection.execute(query) if row[0] is not None)
+            except sqlite3.DatabaseError:
+                return None
+        if not referenced:
+            return None
+
+        backup_root = self._own_root / "backups"
+        if not backup_root.is_dir():
+            return None
+        candidates = sorted(
+            (path for path in backup_root.iterdir() if path.is_dir() and (path / "wydawcy.db").is_file()),
+            key=lambda path: path.stat().st_mtime,
+            reverse=True,
+        )
+        for backup in candidates:
+            source = backup / "wydawcy.db"
+            try:
+                with closing(sqlite3.connect(f"file:{source}?mode=ro", uri=True)) as connection:
+                    rows = connection.execute("SELECT id FROM wydawcy").fetchall()
+                    ids = {int(row[0]) for row in rows}
+                    check = connection.execute("PRAGMA quick_check").fetchone()
+                if not referenced.issubset(ids):
+                    continue
+                if check is None or str(check[0]).casefold() != "ok":
+                    continue
+            except (sqlite3.DatabaseError, OSError, ValueError, TypeError):
+                continue
+            self.restore_safety_backup(backup, ("wydawcy.db",))
+            return backup
+        return None
+
     def _backup_before_schema_update(self) -> Path | None:
         existing = [self._own_root / name for name in DB_FILES if (self._own_root / name).is_file()]
         if not existing:

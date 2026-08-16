@@ -1,4 +1,4 @@
-# Sesyjka GTK4 0.9.9
+# Sesyjka GTK4 0.9.10
 
 A native Linux application built with Python, GTK4 and Libadwaita. It manages tabletop RPG systems, books, supplements, sessions, players, publishers, board games and card games. The four original SQLite databases remain compatible, while board and card games use a separate fifth database.
 
@@ -6,7 +6,7 @@ Result repository: https://github.com/Lioheart/Sesyjka
 
 Original project and attribution: https://github.com/ZuraffPL/sesyjka
 
-## Sesyjka Cloud 0.9.9
+## Sesyjka Cloud 0.9.10
 
 Version 0.9.3 uses Discord OAuth for the optional offline-first cloud synchronization. Existing SQLite databases remain the local source of truth and keep their current schemas. A separate `sync.db` stores synchronization mappings, device state and unresolved conflicts.
 
@@ -14,7 +14,7 @@ The cloud backend uses Supabase Auth and the Supabase Data REST API. The product
 
 The application signs users in through Discord OAuth in the default browser, refreshes the resulting Supabase session, synchronizes manually or automatically, continues working offline, and explicitly resolves records that changed both locally and remotely. The header shows the current cloud state and conflict count.
 
-See `supabase/README.md` for setup instructions. Discord passwords never reach Sesyjka. Authentication takes place in the default browser using OAuth PKCE. The refresh token is stored in the user configuration directory with file mode `0600`, but version 0.9.9 does not encrypt that file itself.
+See `supabase/README.md` for setup instructions. Discord passwords never reach Sesyjka. Authentication takes place in the default browser using OAuth PKCE. The refresh token is stored in the user configuration directory with file mode `0600`, but version 0.9.10 does not encrypt that file itself.
 
 
 ## Digital resources in 0.9.4
@@ -22,6 +22,15 @@ See `supabase/README.md` for setup instructions. Discord passwords never reach S
 Version 0.9.4 adds a separate `zasoby.db` library for PDFs, VTT content and web resources. Files are not copied into the application. Logical storage roots represent local disks, NAS shares or USB devices, while resource locations store a stable storage UUID and a relative path. Device-specific mount-point mappings are not synchronized. Resources and logical locations can be synchronized through Sesyjka Cloud.
 
 The PDF scanner recursively indexes files, calculates SHA-256 and only auto-links a file to an RPG item at high confidence. The DriveThruRPG integration is experimental: an Application Key with My Library Access can import purchase/file metadata and product links without automatically downloading large PDFs. The key stays local with mode `0600`.
+
+## Changes in 0.9.10
+
+- cloud synchronization now creates a coherent local safety snapshot before applying remote database changes and automatically restores local databases plus `sync.db` if a synchronization pass fails
+- a physically missing Supabase row is no longer treated as a deletion. Local deletion is propagated only from an explicit `deleted=true` tombstone
+- RPG self-references are ordered by the actual `system_glowny_id` dependency so parents are created first and children are deleted first
+- foreign-key failures identify the affected cloud record and trigger rollback instead of leaving earlier databases partially modified
+- a conservative recovery path restores `wydawcy.db` from the newest compatible backup when the current publisher table is empty but other local records still reference publisher IDs
+- the 0.9.9 DriveThruRPG table behavior remains unchanged: the resource name is the product title and a separate file-name column shows the specific download
 
 ## Changes in 0.9.9
 

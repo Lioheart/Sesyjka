@@ -221,6 +221,59 @@ class CloudSyncTests(unittest.TestCase):
         remote = self.fake.records[("publishers", str(publisher_id))]
         self.assertEqual(remote["owner_id"], self.cloud.session.user_id)
 
+    def test_missing_remote_row_never_deletes_local_record(self) -> None:
+        publisher_id = self.repo.save_publisher({"nazwa": "Local Safe", "kraj": "PL", "strona": ""})
+        self.cloud.sync(self.url, self.key)
+        del self.fake.records[("publishers", str(publisher_id))]
+
+        report = self.cloud.sync(self.url, self.key)
+
+        self.assertGreaterEqual(report.uploaded, 1)
+        self.assertEqual(self.repo.publishers()[0]["nazwa"], "Local Safe")
+        self.assertIn(("publishers", str(publisher_id)), self.fake.records)
+        self.assertFalse(self.fake.records[("publishers", str(publisher_id))]["deleted"])
+
+    def test_failed_remote_apply_rolls_back_publishers_and_sync_state(self) -> None:
+        publisher_id = self.repo.save_publisher({"nazwa": "Do ochrony", "kraj": "PL", "strona": ""})
+        self.cloud.sync(self.url, self.key)
+        before_mapping = self.cloud.store.mapping("publishers", str(publisher_id))
+        self.assertIsNotNone(before_mapping)
+        before_remote_hash = str(before_mapping["last_remote_hash"])
+
+        publisher_row = self.fake.records[("publishers", str(publisher_id))]
+        publisher_row["payload"] = {}
+        publisher_row["deleted"] = True
+        publisher_row["version"] = 2
+        self.fake.records[("digital_locations", "999")] = {
+            "id": "digital_locations-999",
+            "owner_id": self.cloud.session.user_id,
+            "entity_type": "digital_locations",
+            "record_key": "999",
+            "payload": {
+                "id": 999,
+                "zasob_id": 123456,
+                "typ": "DriveThruRPG",
+                "url": "https://example.invalid",
+                "preferowana": 0,
+                "ostatnio_dostepny": 1,
+            },
+            "version": 1,
+            "deleted": False,
+            "updated_at": "2026-08-15T00:00:00Z",
+            "device_id": "other",
+        }
+
+        with self.assertRaisesRegex(Exception, "Lokalne bazy przywrócono"):
+            self.cloud.sync(self.url, self.key)
+
+        publishers = self.repo.publishers()
+        self.assertEqual(len(publishers), 1)
+        self.assertEqual(publishers[0]["nazwa"], "Do ochrony")
+        restored_mapping = self.cloud.store.mapping("publishers", str(publisher_id))
+        self.assertIsNotNone(restored_mapping)
+        self.assertEqual(str(restored_mapping["last_remote_hash"]), before_remote_hash)
+
+
     def test_session_store_uses_owner_only_permissions(self) -> None:
         session = CloudSession("access", "refresh", 123, "uid", "u@example.com")
         self.token_store.save(session)

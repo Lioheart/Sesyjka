@@ -5,6 +5,7 @@ import hashlib
 import json
 import logging
 import os
+import shutil
 import sqlite3
 import threading
 import time
@@ -18,7 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
-from .config import config_dir
+from .config import DB_FILES, config_dir
 from .database_manager import DatabaseManager
 from .oauth import LoopbackOAuthReceiver, build_discord_authorize_url, create_pkce_pair
 
@@ -558,6 +559,8 @@ class CloudService:
         self.token_store = token_store or SessionTokenStore()
         self._session = self.token_store.load()
         self._lock = threading.Lock()
+        self._active_sync_backup: Path | None = None
+        self._active_sync_backup_extended = False
 
     @property
     def session(self) -> CloudSession | None:
@@ -670,7 +673,18 @@ class CloudService:
             raise CloudError("Synchronizacja jest wyłączona w trybie gościa.")
         if not self._lock.acquire(blocking=False):
             raise CloudError("Synchronizacja już trwa.")
+
+        safety_backup: Path | None = None
         try:
+            # sync.db is small, so snapshot it before any mapping is changed. The
+            # larger domain databases are appended lazily immediately before the
+            # first remote write. If a later record violates an FK or another
+            # error interrupts the pass, the local state can be rolled back as a
+            # coherent unit instead of leaving earlier entities deleted.
+            safety_backup = self.databases.create_safety_backup("cloud-sync", ("sync.db",))
+            self._active_sync_backup = safety_backup
+            self._active_sync_backup_extended = False
+
             session = self.ensure_session(url, key)
             previous_user = self.store.get_meta("last_sync_user")
             if previous_user and previous_user != session.user_id:
@@ -698,26 +712,53 @@ class CloudService:
                     },
                     key=_record_key_sort_key,
                 )
-                # Grupy muszą trafić do systemy_rpg przed elementami należącymi do grup.
                 if spec.name == "rpg_items":
-                    def rpg_order(record_key: str) -> tuple[int, tuple[Any, ...]]:
+                    # system_glowny_id is a real self-FK. Sort by dependency depth
+                    # instead of relying only on the semantic type label. Parents
+                    # are applied before children, while remote deletions remove
+                    # the deepest children first.
+                    key_set = set(keys)
+                    depth_cache: dict[str, int] = {}
+
+                    def rpg_payload(record_key: str) -> dict[str, Any]:
                         remote_row = remote.get((spec.name, record_key)) or {}
-                        payload = local.get((spec.name, record_key)) or remote_row.get("payload") or {}
-                        is_group = str(payload.get("typ") or "") == "Grupa"
-                        is_remote_delete = bool(remote_row.get("deleted"))
-                        if is_remote_delete:
-                            # Dzieci są usuwane przed grupami ze względu na self-FK.
-                            phase = 3 if is_group else 2
+                        if remote_row and not bool(remote_row.get("deleted")):
+                            payload = remote_row.get("payload")
+                            if isinstance(payload, dict):
+                                return payload
+                        return local.get((spec.name, record_key)) or {}
+
+                    def rpg_depth(record_key: str, visiting: set[str] | None = None) -> int:
+                        cached = depth_cache.get(record_key)
+                        if cached is not None:
+                            return cached
+                        visiting = set(visiting or ())
+                        if record_key in visiting:
+                            return 0
+                        visiting.add(record_key)
+                        payload = rpg_payload(record_key)
+                        parent = payload.get("system_glowny_id")
+                        parent_key = str(parent) if parent is not None else ""
+                        if parent_key and parent_key in key_set:
+                            value = 1 + rpg_depth(parent_key, visiting)
                         else:
-                            # Grupy są tworzone przed rekordami, które na nie wskazują.
-                            phase = 0 if is_group else 1
-                        return phase, _record_key_sort_key(record_key)
+                            value = 0
+                        depth_cache[record_key] = value
+                        return value
+
+                    def rpg_order(record_key: str) -> tuple[int, int, tuple[Any, ...]]:
+                        remote_row = remote.get((spec.name, record_key)) or {}
+                        remote_delete = bool(remote_row.get("deleted"))
+                        depth = rpg_depth(record_key)
+                        return (1 if remote_delete else 0, -depth if remote_delete else depth, _record_key_sort_key(record_key))
+
                     keys.sort(key=rpg_order)
+
                 for record_key in keys:
                     local_payload = local.get((spec.name, record_key))
                     remote_row = remote.get((spec.name, record_key))
                     if self.store.has_open_conflict(spec.name, record_key):
-                        remote_deleted = bool(remote_row.get("deleted")) if remote_row else True
+                        remote_deleted = bool(remote_row.get("deleted")) if remote_row else False
                         remote_payload = dict(remote_row.get("payload") or {}) if remote_row and not remote_deleted else None
                         remote_version = int(remote_row.get("version") or 0) if remote_row else 0
                         self.store.record_conflict(
@@ -730,9 +771,44 @@ class CloudService:
 
             self.store.set_meta("last_sync_at", str(int(time.time())))
             self.store.set_meta("last_sync_user", session.user_id)
+            if self._active_sync_backup_extended and safety_backup is not None:
+                self.databases.prune_safety_backups("cloud-sync", keep=10)
+            elif safety_backup is not None:
+                shutil.rmtree(safety_backup, ignore_errors=True)
             return report
+        except Exception as exc:
+            if safety_backup is not None and safety_backup.exists():
+                domain_changes_started = self._active_sync_backup_extended
+                try:
+                    self.databases.restore_safety_backup(safety_backup)
+                except Exception as restore_exc:
+                    raise CloudError(
+                        "Synchronizacja została przerwana, a automatyczne przywrócenie kopii "
+                        f"bezpieczeństwa nie powiodło się. Kopia: {safety_backup}. "
+                        f"Błąd synchronizacji: {exc}. Błąd przywracania: {restore_exc}"
+                    ) from exc
+                if not domain_changes_started:
+                    shutil.rmtree(safety_backup, ignore_errors=True)
+                    raise
+                message = (
+                    "Synchronizacja została przerwana. Lokalne bazy przywrócono do stanu "
+                    f"sprzed synchronizacji z kopii {safety_backup.name}. Przyczyna: {exc}"
+                )
+                if isinstance(exc, CloudOfflineError):
+                    raise CloudOfflineError(message) from exc
+                raise CloudError(message) from exc
+            raise
         finally:
+            self._active_sync_backup = None
+            self._active_sync_backup_extended = False
             self._lock.release()
+
+    def _ensure_sync_domain_backup(self) -> None:
+        backup = self._active_sync_backup
+        if backup is None or self._active_sync_backup_extended:
+            return
+        self.databases.extend_safety_backup(backup, DB_FILES)
+        self._active_sync_backup_extended = True
 
     def _sync_record(
         self,
@@ -746,19 +822,35 @@ class CloudService:
     ) -> None:
         mapping = self.store.mapping(spec.name, record_key)
         local_hash = _payload_hash(local_payload) if local_payload is not None else DELETED_HASH
-        remote_deleted = bool(remote_row.get("deleted")) if remote_row else True
-        remote_payload = dict(remote_row.get("payload") or {}) if remote_row and not remote_deleted else None
+
+        # Sesyjka represents deletions with explicit tombstones. A physically
+        # missing remote row is therefore not a deletion signal. Treating it as
+        # one could erase a complete local database after a partial backend
+        # response, manual backend cleanup or a transient server-side issue.
+        if remote_row is None:
+            if local_payload is None:
+                if mapping is not None:
+                    self.store.set_mapping(spec.name, record_key, DELETED_HASH, DELETED_HASH, 0)
+                report.unchanged += 1
+                return
+            version = max(1, int(mapping["remote_version"] or 0) + 1) if mapping is not None else 1
+            pushed = self._push(
+                client, session, spec.name, record_key, local_payload, False, version
+            )
+            pushed_hash = _remote_hash(pushed)
+            self.store.set_mapping(
+                spec.name, record_key, local_hash, pushed_hash, int(pushed.get("version") or version)
+            )
+            report.uploaded += 1
+            return
+
+        remote_deleted = bool(remote_row.get("deleted"))
+        remote_payload = dict(remote_row.get("payload") or {}) if not remote_deleted else None
         remote_hash = _payload_hash(remote_payload) if remote_payload is not None else DELETED_HASH
-        remote_version = int(remote_row.get("version") or 0) if remote_row else 0
+        remote_version = int(remote_row.get("version") or 0)
 
         if mapping is None:
-            if local_payload is not None and remote_row is None:
-                pushed = self._push(client, session, spec.name, record_key, local_payload, False, 1)
-                pushed_hash = _remote_hash(pushed)
-                self.store.set_mapping(spec.name, record_key, local_hash, pushed_hash, int(pushed.get("version") or 1))
-                report.uploaded += 1
-                return
-            if local_payload is None and remote_row is not None:
+            if local_payload is None:
                 if remote_deleted:
                     self.store.set_mapping(spec.name, record_key, DELETED_HASH, DELETED_HASH, remote_version)
                     report.unchanged += 1
@@ -767,17 +859,15 @@ class CloudService:
                 self.store.set_mapping(spec.name, record_key, remote_hash, remote_hash, remote_version)
                 report.downloaded += 1
                 return
-            if local_payload is not None and remote_row is not None:
-                if not remote_deleted and local_hash == remote_hash:
-                    self.store.set_mapping(spec.name, record_key, local_hash, remote_hash, remote_version)
-                    report.unchanged += 1
-                    return
-                self.store.record_conflict(
-                    spec.name, record_key, local_payload, remote_payload,
-                    False, remote_deleted, remote_version,
-                )
-                report.conflicts += 1
+            if not remote_deleted and local_hash == remote_hash:
+                self.store.set_mapping(spec.name, record_key, local_hash, remote_hash, remote_version)
+                report.unchanged += 1
                 return
+            self.store.record_conflict(
+                spec.name, record_key, local_payload, remote_payload,
+                False, remote_deleted, remote_version,
+            )
+            report.conflicts += 1
             return
 
         last_local = str(mapping["last_local_hash"] or DELETED_HASH)
@@ -870,29 +960,35 @@ class CloudService:
         deleted: bool,
     ) -> None:
         key_values = _parse_record_key(spec, record_key)
-        with self.databases.connect(spec.db_file, write=True) as connection:
-            if deleted:
-                where = " AND ".join(f"{column}=?" for column in spec.key_columns)
-                connection.execute(f"DELETE FROM {spec.table} WHERE {where}", key_values)
-                return
-            if payload is None:
-                raise CloudError("Brak danych rekordu chmurowego.")
-            columns = {str(row[1]) for row in connection.execute(f"PRAGMA table_info({spec.table})")}
-            clean = {key: value for key, value in payload.items() if key in columns}
-            for column, value in zip(spec.key_columns, key_values):
-                clean[column] = value
-            names = list(clean)
-            placeholders = ", ".join("?" for _ in names)
-            conflict = ", ".join(spec.key_columns)
-            updates = ", ".join(f"{name}=excluded.{name}" for name in names if name not in spec.key_columns)
-            if updates:
-                sql = (
-                    f"INSERT INTO {spec.table} ({', '.join(names)}) VALUES ({placeholders}) "
-                    f"ON CONFLICT({conflict}) DO UPDATE SET {updates}"
-                )
-            else:
-                sql = f"INSERT OR IGNORE INTO {spec.table} ({', '.join(names)}) VALUES ({placeholders})"
-            connection.execute(sql, tuple(clean[name] for name in names))
+        self._ensure_sync_domain_backup()
+        try:
+            with self.databases.connect(spec.db_file, write=True) as connection:
+                if deleted:
+                    where = " AND ".join(f"{column}=?" for column in spec.key_columns)
+                    connection.execute(f"DELETE FROM {spec.table} WHERE {where}", key_values)
+                    return
+                if payload is None:
+                    raise CloudError("Brak danych rekordu chmurowego.")
+                columns = {str(row[1]) for row in connection.execute(f"PRAGMA table_info({spec.table})")}
+                clean = {key: value for key, value in payload.items() if key in columns}
+                for column, value in zip(spec.key_columns, key_values):
+                    clean[column] = value
+                names = list(clean)
+                placeholders = ", ".join("?" for _ in names)
+                conflict = ", ".join(spec.key_columns)
+                updates = ", ".join(f"{name}=excluded.{name}" for name in names if name not in spec.key_columns)
+                if updates:
+                    sql = (
+                        f"INSERT INTO {spec.table} ({', '.join(names)}) VALUES ({placeholders}) "
+                        f"ON CONFLICT({conflict}) DO UPDATE SET {updates}"
+                    )
+                else:
+                    sql = f"INSERT OR IGNORE INTO {spec.table} ({', '.join(names)}) VALUES ({placeholders})"
+                connection.execute(sql, tuple(clean[name] for name in names))
+        except sqlite3.IntegrityError as exc:
+            raise CloudError(
+                f"Nie można zastosować rekordu {spec.name}/{record_key} z chmury: {exc}"
+            ) from exc
 
     def resolve_conflict(self, url: str, key: str, conflict_id: int, resolution: str) -> None:
         conflict = self.store.conflict(conflict_id)
