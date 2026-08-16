@@ -1,4 +1,4 @@
-# Sesyjka GTK4 0.9.12
+# Sesyjka GTK4 0.9.13
 
 Natywna aplikacja dla Linuksa zbudowana w Pythonie, GTK4 i Libadwaita. Program kataloguje systemy RPG, podręczniki, suplementy, sesje, graczy, wydawców oraz gry planszowe i karciane.
 
@@ -6,7 +6,7 @@ Repozytorium wynikowe: https://github.com/Lioheart/Sesyjka
 
 Projekt źródłowy i atrybucja: https://github.com/ZuraffPL/sesyjka
 
-## Sesyjka Cloud 0.9.12
+## Sesyjka Cloud 0.9.13
 
 Sesyjka działa teraz w modelu **offline-first**. Wszystkie dotychczasowe bazy SQLite nadal są lokalnym źródłem danych i program działa bez Internetu. Osobna baza `sync.db` przechowuje wyłącznie stan synchronizacji, identyfikator urządzenia i konflikty. Nie dodaje żadnych kolumn ani tabel do `systemy_rpg.db`, `sesje_rpg.db`, `gracze.db`, `wydawcy.db` ani `planszowe.db`. Nowa biblioteka cyfrowa korzysta z osobnego `zasoby.db`, więc cztery bazy projektu źródłowego pozostają bez zmian.
 
@@ -25,7 +25,7 @@ Synchronizacja działa ręcznie oraz automatycznie w ustalonym interwale. Lokaln
 
 Jeżeli ten sam rekord zmienił się lokalnie i w chmurze, pierwszeństwo ma aktualny rekord z lokalnej bazy SQLite. Jeżeli lokalny rekord nie zmienił się od poprzedniej synchronizacji, zmiana z chmury może zostać zastosowana lokalnie. Usunięcia są synchronizowane jako jawne tombstone `deleted=true`. Okno konfliktów pozostaje dostępne do obsługi nierozwiązanych konfliktów zapisanych przez starsze wersje programu.
 
-Sesyjka nie otrzymuje ani nie zapisuje hasła Discord. Logowanie odbywa się w domyślnej przeglądarce w przepływie OAuth PKCE. Token odświeżania jest chroniony uprawnieniami pliku `0600`, ale w wersji 0.9.12 nie jest szyfrowany przez Sesyjkę. Nie kopiuj pliku sesji między użytkownikami ani urządzeniami. Token sesji jest przechowywany w `${XDG_CONFIG_HOME:-~/.config}/sesyjka/cloud-session.json` z prawami `0600`.
+Sesyjka nie otrzymuje ani nie zapisuje hasła Discord. Logowanie odbywa się w domyślnej przeglądarce w przepływie OAuth PKCE. Token odświeżania jest chroniony uprawnieniami pliku `0600`, ale w wersji 0.9.13 nie jest szyfrowany przez Sesyjkę. Nie kopiuj pliku sesji między użytkownikami ani urządzeniami. Token sesji jest przechowywany w `${XDG_CONFIG_HOME:-~/.config}/sesyjka/cloud-session.json` z prawami `0600`.
 
 ## Funkcje
 
@@ -53,6 +53,11 @@ Transfer danych obejmuje eksport ZIP, eksport do folderu, eksport XLSX, eksport 
 Formularz pozycji RPG ma dzielony układ. Około 60% szerokości zajmują pola edycji, a prawa część pokazuje dane znalezione dla ISBN: okładkę, tytuł, rok wydania, wydawcę i ewentualną informacyjną cenę online. Metadane są pobierane na żądanie oraz automatycznie przy otwarciu rekordu z zapisanym ISBN. Puste pola nazwy i roku są uzupełniane automatycznie. Jeżeli wydawca znaleziony online już istnieje w `wydawcy.db`, może zostać automatycznie dopasowany. Istniejące wartości można zastąpić przyciskiem `Użyj danych z ISBN`. Jeśli lokalna cena nie jest podana, dostępna cena z Google Books może zostać pokazana i ręcznie zastosowana do wybranego formatu. Cena Google Books może dotyczyć e-booka i jest jawnie oznaczana jako informacyjna.
 
 Wyszukiwanie ISBN korzysta z publicznego API Biblioteki Narodowej, Open Library oraz Google Books. ISBN jest normalizowany przed wyszukiwaniem, dlatego myślniki i spacje nie mają wpływu na wynik. Program wylicza również odpowiadający ISBN-10 lub ISBN-13 i próbuje oba identyfikatory. Google Books jest przeszukiwane kolejno po `isbn:`, po samym numerze oraz, gdy katalog biblioteczny dostarczy tytuł, także po tytule i wydawcy. Okładki są pobierane z wielu kandydatów. Jeżeli API Google nie zwraca `imageLinks`, program próbuje front cover po identyfikatorze woluminu Google Books. Okładki są zapisywane w `${XDG_CACHE_HOME:-~/.cache}/sesyjka/covers/`, a metadane i informacja o zakończonej próbie pobrania okładki w `${XDG_CACHE_HOME:-~/.cache}/sesyjka/books/`. Automatyczne otwarcie rekordu najpierw korzysta z tego cache. Przycisk `Pobierz z ISBN` wymusza odświeżenie z internetu. Opcjonalnie można ustawić `SESYJKA_GOOGLE_BOOKS_API_KEY`.
+
+## Zmiany w 0.9.13
+
+- lokalizacje zasobów cyfrowych zaczynające się od `https://` lub `http://` są wyświetlane w edytorze jako klikalne linki i otwierają się w domyślnej przeglądarce
+- lokalizacje wskazujące pliki lokalne, NAS lub USB pozostają zwykłym tekstem, więc kliknięcie nie zmienia ich zachowania
 
 ## Zmiany w 0.9.12
 
@@ -261,7 +266,7 @@ sync.db
 
 Pierwsze cztery pliki zachowują schematy zgodne z projektem `ZuraffPL/sesyjka`. Nowa funkcja planszówek nie dodaje tabel ani kolumn do tych baz. Jest przechowywana wyłącznie w `planszowe.db`.
 
-Import i tryb gościa nadal akceptują zestaw zawierający tylko cztery oryginalne bazy. W takim przypadku zakładka gier planszowych pozostaje pusta. Eksport tworzony przez wersję 0.9.12 zawiera sześć baz danych użytkownika, w tym `planszowe.db` i `zasoby.db`. `sync.db` nie jest eksportowany, ponieważ zawiera stan konkretnego konta i urządzenia.
+Import i tryb gościa nadal akceptują zestaw zawierający tylko cztery oryginalne bazy. W takim przypadku zakładka gier planszowych pozostaje pusta. Eksport tworzony przez wersję 0.9.13 zawiera sześć baz danych użytkownika, w tym `planszowe.db` i `zasoby.db`. `sync.db` nie jest eksportowany, ponieważ zawiera stan konkretnego konta i urządzenia.
 
 Log diagnostyczny:
 

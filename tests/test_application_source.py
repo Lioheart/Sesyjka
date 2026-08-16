@@ -172,6 +172,15 @@ class ApplicationSourceTests(unittest.TestCase):
         self.assertNotIn('Gtk.Frame(label="Notatki")', source)
         self.assertNotIn('"notatki": note', source)
 
+    def test_web_resource_locations_are_clickable_in_resource_editor(self) -> None:
+        source = (
+            self.root / "sesyjka" / "pages" / "digital_resources.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn('url.startswith(("https://", "http://"))', source)
+        self.assertIn("Gtk.LinkButton.new_with_label(url, description)", source)
+        self.assertIn("Otwórz w przeglądarce", source)
+        self.assertIn("Gtk.Label(label=description", source)
+
     def test_publisher_website_column_uses_clickable_link_button(self) -> None:
         publisher_source = (
             self.root / "sesyjka" / "pages" / "publishers.py"

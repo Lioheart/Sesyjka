@@ -162,9 +162,16 @@ class DigitalResourcesPage(CrudPage):
             dialog.root_box.append(heading)
             for location in existing_locations[:8]:
                 row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-                label = Gtk.Label(label=self._location_description(location), xalign=0.0)
-                label.set_hexpand(True)
-                row.append(label)
+                description = self._location_description(location)
+                url = str(location.get("url") or "").strip()
+                if url.startswith(("https://", "http://")):
+                    location_widget: Gtk.Widget = Gtk.LinkButton.new_with_label(url, description)
+                    location_widget.set_halign(Gtk.Align.START)
+                    location_widget.set_tooltip_text(f"Otwórz w przeglądarce: {url}")
+                else:
+                    location_widget = Gtk.Label(label=description, xalign=0.0)
+                location_widget.set_hexpand(True)
+                row.append(location_widget)
                 remove = Gtk.Button.new_from_icon_name("edit-delete-symbolic")
                 remove.set_tooltip_text("Usuń lokalizację")
                 remove.connect(

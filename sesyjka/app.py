@@ -1126,6 +1126,8 @@ class SesyjkaWindow(Adw.ApplicationWindow):
     def show_history(self) -> None:
         dialog = ModalWindow(self, "Historia zmian", width=720, height=620)
         history_text = (
+            "0.9.13\n"
+            "Adresy WWW zapisane jako lokalizacje zasobów cyfrowych są teraz klikalnymi linkami i otwierają się w domyślnej przeglądarce. Lokalne ścieżki plików pozostają zwykłym tekstem.\n\n"
             "0.9.12\n"
             "Powiązanie zasobu PDF lub VTT z pozycją RPG automatycznie zaznacza odpowiadający format w kolekcji bez nadpisywania ręcznie ustawionej platformy VTT. Odświeżanie tabel po zapisie zachowuje pozycję przewijania, zaznaczenie i rozwinięte grupy, więc długa lista nie wraca do początku.\n\n"
             "0.9.11\n"

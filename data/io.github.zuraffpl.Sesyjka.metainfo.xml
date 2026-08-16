@@ -79,6 +79,12 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="0.9.13" date="2026-08-16">
+      <description>
+        <p>Web locations in the digital resource editor are now clickable links that open in the default browser, while local file locations remain plain text.</p>
+        <p xml:lang="pl">Lokalizacje WWW w edytorze zasobów cyfrowych są teraz klikalnymi linkami otwieranymi w domyślnej przeglądarce, a lokalne ścieżki plików pozostają zwykłym tekstem.</p>
+      </description>
+    </release>
     <release version="0.9.12" date="2026-08-16">
       <description>
         <p>Linked PDF and VTT resources now update the corresponding RPG item format flags, while CRUD table refreshes preserve selection, scroll position and expanded groups.</p>
