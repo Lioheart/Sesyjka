@@ -1110,6 +1110,8 @@ class SesyjkaWindow(Adw.ApplicationWindow):
     def show_history(self) -> None:
         dialog = ModalWindow(self, "Historia zmian", width=720, height=620)
         history_text = (
+            "0.9.9\n"
+            "DriveThruRPG ponownie zachowuje nazwę produktu jako nazwę zasobu. Dodano osobną kolumnę Nazwa pliku z przyjaznym tytułem konkretnego pliku, z fallbackiem do technicznej nazwy. Ponowna synchronizacja aktualizuje rekordy z 0.9.8 i automatycznie rozszerza zasoby.db o nowe pole.\n\n"
             "0.9.8\n"
             "Poprawiono nazwy zasobów importowanych z DriveThruRPG. Gdy jeden produkt zawiera wiele plików, każdy zasób otrzymuje nazwę konkretnego pliku zamiast powielonej nazwy produktu. Nazwa produktu jest zachowywana osobno do dopasowania zasobu do pozycji RPG. Ponowna synchronizacja aktualizuje wcześniej zaimportowane rekordy bez zmiany schematu bazy.\n\n"
             "0.9.7\n"

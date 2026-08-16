@@ -110,7 +110,7 @@ class DatabaseManager:
         "zasoby.db": {
             "zasoby": {
                 "id", "pozycja_rpg_id", "typ", "nazwa", "dostawca",
-                "format", "sha256", "nazwa_pliku", "external_id",
+                "format", "sha256", "nazwa_pliku", "tytul_pliku", "external_id",
                 "product_url", "rozmiar", "isbn", "wydawca",
                 "data_zakupu", "utworzono", "zmodyfikowano",
             },
@@ -498,6 +498,7 @@ class DatabaseManager:
                     format TEXT,
                     sha256 TEXT,
                     nazwa_pliku TEXT,
+                    tytul_pliku TEXT,
                     external_id TEXT,
                     product_url TEXT,
                     rozmiar INTEGER,
@@ -551,6 +552,7 @@ class DatabaseManager:
                     "format": "TEXT",
                     "sha256": "TEXT",
                     "nazwa_pliku": "TEXT",
+                    "tytul_pliku": "TEXT",
                     "external_id": "TEXT",
                     "product_url": "TEXT",
                     "rozmiar": "INTEGER",

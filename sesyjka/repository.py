@@ -1076,7 +1076,7 @@ class Repository:
             "zasoby.db",
             """
             SELECT id, pozycja_rpg_id, typ, nazwa, dostawca, format, sha256,
-                   nazwa_pliku, external_id, product_url, rozmiar, isbn,
+                   nazwa_pliku, tytul_pliku, external_id, product_url, rozmiar, isbn,
                    wydawca, data_zakupu, utworzono, zmodyfikowano
             FROM zasoby
             ORDER BY nazwa COLLATE NOCASE, id
@@ -1092,6 +1092,7 @@ class Repository:
             item["dostepnosc"] = status
             item["lokalizacje"] = location_summary
             item["liczba_lokalizacji"] = location_count
+            item["plik_tekst"] = str(item.get("tytul_pliku") or item.get("nazwa_pliku") or "")
             item["rozmiar_tekst"] = self._format_file_size(item.get("rozmiar"))
             result.append(item)
         return result
@@ -1111,7 +1112,7 @@ class Repository:
             position_id = None
         fields = (
             "pozycja_rpg_id", "typ", "nazwa", "dostawca", "format", "sha256",
-            "nazwa_pliku", "external_id", "product_url", "rozmiar", "isbn",
+            "nazwa_pliku", "tytul_pliku", "external_id", "product_url", "rozmiar", "isbn",
             "wydawca", "data_zakupu",
         )
         normalized = dict(values)
@@ -1298,6 +1299,7 @@ class Repository:
                     entry.format_name,
                     entry.sha256 or None,
                     entry.filename or None,
+                    entry.file_title or None,
                     entry.product_url,
                     entry.size,
                     entry.isbn or None,
@@ -1312,7 +1314,7 @@ class Repository:
                     connection.execute(
                         """
                         UPDATE zasoby SET pozycja_rpg_id=?, typ=?, nazwa=?, dostawca=?,
-                        format=?, sha256=?, nazwa_pliku=?, product_url=?, rozmiar=?,
+                        format=?, sha256=?, nazwa_pliku=?, tytul_pliku=?, product_url=?, rozmiar=?,
                         isbn=?, wydawca=?, data_zakupu=?, zmodyfikowano=CURRENT_TIMESTAMP
                         WHERE id=?
                         """,
@@ -1325,11 +1327,11 @@ class Repository:
                         """
                         INSERT INTO zasoby
                         (id, pozycja_rpg_id, typ, nazwa, dostawca, format, sha256,
-                         nazwa_pliku, external_id, product_url, rozmiar, isbn,
+                         nazwa_pliku, tytul_pliku, external_id, product_url, rozmiar, isbn,
                          wydawca, data_zakupu)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
-                        (resource_id, *values[:7], entry.external_id, *values[7:]),
+                        (resource_id, *values[:8], entry.external_id, *values[8:]),
                     )
                     created += 1
                 if position_id is not None:

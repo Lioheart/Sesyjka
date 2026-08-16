@@ -19,7 +19,7 @@ DTRPG_API_BASE = "https://api.drivethrurpg.com/api"
 DTRPG_API_VERSION = "vBeta"
 DTRPG_ACCOUNT_URL = "https://www.drivethrurpg.com/account.php"
 DTRPG_LIBRARY_URL = "https://www.drivethrurpg.com/en/mylibrary"
-DTRPG_USER_AGENT = "Sesyjka/0.9.8 (+https://github.com/Lioheart/Sesyjka)"
+DTRPG_USER_AGENT = "Sesyjka/0.9.9 (+https://github.com/Lioheart/Sesyjka)"
 
 
 class DigitalResourceError(RuntimeError):
@@ -67,6 +67,7 @@ class DriveThruLibraryItem:
     format_name: str
     date_purchased: str
     product_title: str = ""
+    file_title: str = ""
 
 
 def normalize_text(value: str) -> str:
@@ -457,6 +458,7 @@ class DriveThruRPGClient:
         isbn: str = "",
         date_purchased: str = "",
         product_title: str = "",
+        file_title: str = "",
     ) -> DriveThruLibraryItem:
         resource_type, format_name = self._resource_type(filename) if filename else ("WWW", "DriveThruRPG")
         product_url = (
@@ -481,13 +483,14 @@ class DriveThruRPGClient:
             format_name=format_name,
             date_purchased=date_purchased,
             product_title=product_title or title,
+            file_title=file_title,
         )
 
     @staticmethod
     def _file_display_title(file_info: dict[str, Any], filename: str, product_title: str) -> str:
-        """Zwróć nazwę konkretnego pliku zamiast nazwy całego produktu.
+        """Zwróć przyjazny tytuł pliku do pokazania obok nazwy produktu.
 
-        DriveThruRPG może podawać przy pliku przyjazną nazwę niezależną od
+        DriveThruRPG może podawać przy pliku etykietę niezależną od
         technicznej nazwy pliku. Jeżeli jej nie ma, używamy nazwy pliku bez
         rozszerzenia. Nazwa produktu pozostaje ostatecznym fallbackiem.
         """
@@ -543,7 +546,6 @@ class DriveThruRPGClient:
                     )
                 )
                 continue
-            multiple_files = sum(isinstance(file_info, dict) for file_info in files) > 1
             for position, file_info in enumerate(files):
                 if not isinstance(file_info, dict):
                     continue
@@ -553,17 +555,13 @@ class DriveThruRPGClient:
                     index = position
                 filename = str(file_info.get("filename") or file_info.get("title") or "").strip()
                 size = self._safe_int(file_info.get("size"))
-                resource_title = (
-                    self._file_display_title(file_info, filename, title)
-                    if multiple_files
-                    else title
-                )
+                file_title = self._file_display_title(file_info, filename, title)
                 result.append(
                     self._make_item(
                         order_product_id=order_product_id,
                         product_id=product_id,
                         file_index=index,
-                        title=resource_title,
+                        title=title,
                         publisher=publisher,
                         filename=filename,
                         size=size,
@@ -571,6 +569,7 @@ class DriveThruRPGClient:
                         isbn=isbn,
                         date_purchased=date_purchased,
                         product_title=title,
+                        file_title=file_title,
                     )
                 )
         return result
@@ -624,7 +623,6 @@ class DriveThruRPGClient:
                     )
                 )
                 continue
-            multiple_files = sum(isinstance(file_info, dict) for file_info in files) > 1
             for position, file_info in enumerate(files):
                 if not isinstance(file_info, dict):
                     continue
@@ -633,17 +631,13 @@ class DriveThruRPGClient:
                 except (TypeError, ValueError):
                     index = position
                 filename = str(file_info.get("filename") or file_info.get("title") or "").strip()
-                resource_title = (
-                    self._file_display_title(file_info, filename, title)
-                    if multiple_files
-                    else title
-                )
+                file_title = self._file_display_title(file_info, filename, title)
                 result.append(
                     self._make_item(
                         order_product_id=order_product_id,
                         product_id=product_id,
                         file_index=index,
-                        title=resource_title,
+                        title=title,
                         publisher=publisher,
                         filename=filename,
                         size=self._safe_int(file_info.get("size")),
@@ -651,6 +645,7 @@ class DriveThruRPGClient:
                         isbn=isbn,
                         date_purchased=str(attrs.get("datePurchased") or ""),
                         product_title=title,
+                        file_title=file_title,
                     )
                 )
         return result

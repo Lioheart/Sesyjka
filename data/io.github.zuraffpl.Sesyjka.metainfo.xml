@@ -79,6 +79,12 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="0.9.9" date="2026-08-15">
+      <description>
+        <p>DriveThruRPG resources now retain the product title while a separate file-name column shows each specific download title or filename.</p>
+        <p xml:lang="pl">Zasoby DriveThruRPG ponownie zachowują nazwę produktu, a osobna kolumna nazwy pliku pokazuje tytuł lub nazwę konkretnego pobieranego pliku.</p>
+      </description>
+    </release>
     <release version="0.9.8" date="2026-08-15">
       <description>
         <p>DriveThruRPG products with multiple downloads now create resources named after each specific file while retaining the product title separately for collection matching.</p>

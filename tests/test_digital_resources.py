@@ -291,7 +291,7 @@ class DigitalResourceTests(unittest.TestCase):
         self.assertEqual(item.resource_type, "PDF")
         self.assertEqual(item.product_url, "https://www.drivethrurpg.com/en/product/456")
 
-    def test_drivethru_multifile_product_uses_file_titles(self) -> None:
+    def test_drivethru_multifile_product_keeps_product_title_and_file_titles(self) -> None:
         client = DriveThruRPGClient("key")
         payload = [
             {
@@ -315,13 +315,14 @@ class DigitalResourceTests(unittest.TestCase):
             }
         ]
         parsed = client._parse_page(payload)
+        self.assertEqual([item.title for item in parsed], ["Armie Apokalipsy"] * 2)
         self.assertEqual(
-            [item.title for item in parsed],
+            [item.file_title for item in parsed],
             ["Galeria Bohaterów Niezależnych", "Armie Apokalipsy - Edycja Rozszerzona"],
         )
         self.assertEqual([item.product_title for item in parsed], ["Armie Apokalipsy"] * 2)
 
-    def test_drivethru_jsonapi_multifile_product_uses_file_titles(self) -> None:
+    def test_drivethru_jsonapi_multifile_product_keeps_product_title_and_file_titles(self) -> None:
         client = DriveThruRPGClient("key")
         payload = {
             "data": [
@@ -347,7 +348,8 @@ class DigitalResourceTests(unittest.TestCase):
             ]
         }
         parsed = client._parse_page(payload)
-        self.assertEqual([item.title for item in parsed], ["Karta Grzechów", "Karta Postaci"])
+        self.assertEqual([item.title for item in parsed], ["Armie Apokalipsy"] * 2)
+        self.assertEqual([item.file_title for item in parsed], ["Karta Grzechów", "Karta Postaci"])
         self.assertEqual([item.product_title for item in parsed], ["Armie Apokalipsy"] * 2)
 
     def test_drivethru_single_file_product_keeps_product_title(self) -> None:
@@ -369,6 +371,7 @@ class DigitalResourceTests(unittest.TestCase):
         parsed = client._parse_page(payload)
         self.assertEqual(len(parsed), 1)
         self.assertEqual(parsed[0].title, "Player Core")
+        self.assertEqual(parsed[0].file_title, "Technical download label")
         self.assertEqual(parsed[0].product_title, "Player Core")
 
     def test_drivethru_multifile_resource_still_matches_collection_by_product_title(self) -> None:
@@ -377,7 +380,7 @@ class DigitalResourceTests(unittest.TestCase):
             order_product_id=123,
             product_id=456,
             file_index=1,
-            title="Character Sheet",
+            title="Player Core",
             filename="character_sheet.pdf",
             size=200,
             sha256="",
@@ -388,11 +391,14 @@ class DigitalResourceTests(unittest.TestCase):
             format_name="PDF",
             date_purchased="",
             product_title="Player Core",
+            file_title="Character Sheet",
         )
         report = self.repo.import_drivethru_library([item])
         self.assertEqual(report["linked"], 1)
         resource = self.repo.digital_resources()[0]
-        self.assertEqual(resource["nazwa"], "Character Sheet")
+        self.assertEqual(resource["nazwa"], "Player Core")
+        self.assertEqual(resource["tytul_pliku"], "Character Sheet")
+        self.assertEqual(resource["plik_tekst"], "Character Sheet")
         self.assertEqual(resource["pozycja_rpg_id"], self.position_id)
 
     def test_drivethru_library_paginates_current_list_until_empty_page(self) -> None:

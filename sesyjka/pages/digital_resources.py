@@ -33,6 +33,7 @@ class DigitalResourcesPage(CrudPage):
                 ("Pozycja RPG", "pozycja_nazwa"),
                 ("Typ", "typ"),
                 ("Nazwa", "nazwa"),
+                ("Nazwa pliku", "plik_tekst"),
                 ("Dostawca", "dostawca"),
                 ("Format", "format"),
                 ("Rozmiar", "rozmiar_tekst"),
@@ -112,7 +113,8 @@ class DigitalResourcesPage(CrudPage):
         name = make_entry(record.get("nazwa") if record else "", "Nazwa zasobu")
         provider = make_entry(record.get("dostawca") if record else "", "np. Paizo, D&D Beyond, DriveThruRPG")
         format_entry = make_entry(record.get("format") if record else "", "np. PDF, Foundry VTT")
-        filename = make_entry(record.get("nazwa_pliku") if record else "", "Opcjonalna nazwa pliku")
+        file_title = make_entry(record.get("tytul_pliku") if record else "", "Opcjonalny tytuł pliku")
+        filename = make_entry(record.get("nazwa_pliku") if record else "", "Opcjonalna techniczna nazwa pliku")
         isbn = make_entry(record.get("isbn") if record else "", "Opcjonalny ISBN")
         publisher = make_entry(record.get("wydawca") if record else "", "Opcjonalny wydawca")
         product_url = make_entry(record.get("product_url") if record else "", "https://...")
@@ -121,6 +123,7 @@ class DigitalResourcesPage(CrudPage):
         form.add_row("Nazwa *", name)
         form.add_row("Dostawca", provider)
         form.add_row("Format", format_entry)
+        form.add_row("Tytuł pliku", file_title)
         form.add_row("Nazwa pliku", filename)
         form.add_row("ISBN", isbn)
         form.add_row("Wydawca", publisher)
@@ -181,6 +184,7 @@ class DigitalResourcesPage(CrudPage):
                         "dostawca": provider.get_text(),
                         "format": format_entry.get_text(),
                         "nazwa_pliku": filename.get_text(),
+                        "tytul_pliku": file_title.get_text(),
                         "isbn": isbn.get_text(),
                         "wydawca": publisher.get_text(),
                         "product_url": product_url.get_text(),

@@ -44,7 +44,7 @@ Agregacja odbywa się w `Repository.statistics()`, poza widgetami. Widok renderu
 
 ## Sesyjka Cloud
 
-Wersja 0.9.8 zachowuje niezależną warstwę synchronizacji. `sync.db` nie należy do `DB_FILES` i nie jest częścią importu ani eksportu baz domenowych. Zawiera identyfikator urządzenia, hasze ostatnio zsynchronizowanych rekordów i nierozwiązane konflikty.
+Wersja 0.9.9 zachowuje niezależną warstwę synchronizacji. `sync.db` nie należy do `DB_FILES` i nie jest częścią importu ani eksportu baz domenowych. Zawiera identyfikator urządzenia, hasze ostatnio zsynchronizowanych rekordów i nierozwiązane konflikty.
 
 Klient Supabase korzysta z Auth oraz Data REST API przez standardową bibliotekę `urllib`, więc pakiety systemowe nie zyskują dodatkowej zależności Python. Lokalny CRUD nie zależy od sieci. Synchronizacja skanuje rekordy baz domenowych, w tym zasoby cyfrowe, porównuje stabilny JSON i hasze SHA-256 oraz wysyła zmiany lub pobiera wersje chmurowe. Jeżeli obie strony zmieniły rekord od ostatniej udanej synchronizacji, automatyczne nadpisanie jest zatrzymywane.
 
